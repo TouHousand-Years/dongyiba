@@ -1,0 +1,6 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="14" fill="#fbf8f3"/>
+  <rect x="13" y="13" width="38" height="38" rx="4" fill="#a52841" transform="rotate(45 32 32)"/>
+  <circle cx="32" cy="32" r="16" fill="none" stroke="#c19b58" stroke-width="1.5"/>
+  <text x="32" y="40" text-anchor="middle" font-size="25" font-weight="700" font-family="serif" fill="#fbf8f3">東</text>
+</svg>
