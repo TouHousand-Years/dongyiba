@@ -55,6 +55,7 @@ export type LocalGame = {
 export type TimingStats = {
   completedSessionIds: string[];
   winDurationsMs: number[];
+  winAttempts: number[];
 };
 
 export type LocalGuessResult =
@@ -234,7 +235,7 @@ export function createNextUnlimitedGame(catalog: LocalCatalog, previous: LocalGa
 }
 
 function emptyTimingStats(): TimingStats {
-  return { completedSessionIds: [], winDurationsMs: [] };
+  return { completedSessionIds: [], winDurationsMs: [], winAttempts: [] };
 }
 
 export function loadTimingStats(
@@ -251,6 +252,9 @@ export function loadTimingStats(
         : [],
       winDurationsMs: Array.isArray(value.winDurationsMs)
         ? value.winDurationsMs.filter((item): item is number => Number.isFinite(item) && item >= 0)
+        : [],
+      winAttempts: Array.isArray(value.winAttempts)
+        ? value.winAttempts.filter((item): item is number => Number.isInteger(item) && item > 0)
         : [],
     };
   } catch {
@@ -272,6 +276,9 @@ export function recordCompletedTiming(
     winDurationsMs: game.won === true
       ? [...stats.winDurationsMs, game.elapsedMs].slice(-1000)
       : stats.winDurationsMs,
+    winAttempts: game.won === true
+      ? [...stats.winAttempts, game.attempts].slice(-1000)
+      : stats.winAttempts,
   };
   storage.setItem(TIMING_STORAGE_KEY, JSON.stringify(next));
   return next;

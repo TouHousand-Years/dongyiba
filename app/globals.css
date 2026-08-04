@@ -75,6 +75,8 @@ h1 { margin: 0; font-size: clamp(44px, 8vw, 72px); font-weight: 700; letter-spac
 }
 .with-stats .game-card { margin: 0; }
 .timing-panel {
+  --timing-value-width: 78px;
+  --timing-count-width: 48px;
   padding: 20px; border: 1px solid #dfd2cc; border-radius: 16px;
   background: rgba(255,255,255,.72); box-shadow: 0 14px 42px rgba(78,44,47,.06);
   backdrop-filter: blur(12px);
@@ -83,12 +85,27 @@ h1 { margin: 0; font-size: clamp(44px, 8vw, 72px); font-weight: 700; letter-spac
 .round-history { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; max-height: 300px; overflow-y: auto; }
 .round-history li { padding: 9px 10px; border-radius: 8px; background: var(--paper-deep); font: 11px Arial, sans-serif; }
 .round-history span { display: block; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.round-history b { display: block; margin-top: 4px; color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; }
+.round-metrics {
+  width: calc(var(--timing-value-width) + var(--timing-count-width) + 4px);
+  margin: 4px 0 0 auto; display: grid;
+  grid-template-columns: var(--timing-value-width) var(--timing-count-width); gap: 4px;
+  text-align: right;
+}
+.round-history b { display: block; color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; }
+.round-history b:last-child { color: var(--red-dark); font-size: 12px; }
 .empty-history { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .averages { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid #e7ddd8; }
 .averages div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 9px; }
 .averages dt { color: var(--muted); font: 11px Arial, sans-serif; }
-.averages dd { margin: 0; color: var(--red-dark); font: 700 14px Arial, sans-serif; font-variant-numeric: tabular-nums; }
+.averages dd {
+  width: calc(var(--timing-value-width) + var(--timing-count-width) + 4px);
+  margin: 0; display: grid;
+  grid-template-columns: var(--timing-value-width) var(--timing-count-width); gap: 4px;
+  color: var(--red-dark); font: 700 14px Arial, sans-serif;
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+.average-head { margin-top: 0 !important; }
+.average-head dd { color: var(--muted); font-size: 10px; font-weight: 400; }
 .stats-note { margin: 12px 0 0; color: #a09398; font: 10px/1.5 Arial, sans-serif; }
 .mode-switch { width: fit-content; display: flex; padding: 4px; border-radius: 999px; background: var(--paper-deep); margin: 0 auto 24px; }
 .mode-switch button { border: 0; border-radius: 999px; padding: 9px 22px; color: var(--muted); background: transparent; font-size: 13px; }

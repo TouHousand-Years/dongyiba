@@ -30,6 +30,7 @@ export function GameBoard() {
   const [timingStats, setTimingStats] = useState<TimingStats>({
     completedSessionIds: [],
     winDurationsMs: [],
+    winAttempts: [],
   });
 
   function start(nextMode: LocalGameMode = mode, forceNew = false) {
@@ -108,6 +109,7 @@ export function GameBoard() {
   const totalElapsedMs = game ? game.unlimitedElapsedMs + elapsedMs : 0;
   const timerVisible = Boolean(game && !(game.completed && game.won === false));
   const recentDurations = timingStats.winDurationsMs.slice(-10);
+  const recentAttempts = timingStats.winAttempts.slice(-10);
   const average = (durations: number[]) => durations.length
     ? durations.reduce((sum, duration) => sum + duration, 0) / durations.length
     : null;
@@ -279,14 +281,24 @@ export function GameBoard() {
               {[...game.unlimitedHistory].reverse().map((round) => (
                 <li key={round.round}>
                   <span>第 {round.round} 轮 · {round.answer}</span>
-                  <b>{round.won ? formatDuration(round.durationMs) : "未猜出"}</b>
+                  <div className="round-metrics">
+                    <b>{round.won ? formatDuration(round.durationMs) : "未猜出"}</b>
+                    <b>{round.attempts} 次</b>
+                  </div>
                 </li>
               ))}
             </ol>
           ) : <p className="empty-history">完成当前人物后，这里会记录前几轮用时。</p>}
           <dl className="averages">
-            <div><dt>最近 10 次平均</dt><dd>{formatAverage(average(recentDurations))}</dd></div>
-            <div><dt>生涯平均用时</dt><dd>{formatAverage(average(timingStats.winDurationsMs))}</dd></div>
+            <div className="average-head"><dt /><dd><span>用时</span><span>计次</span></dd></div>
+            <div>
+              <dt>最近 10 次平均</dt>
+              <dd><span>{formatAverage(average(recentDurations))}</span><span>{formatAttemptAverage(average(recentAttempts))}</span></dd>
+            </div>
+            <div>
+              <dt>生涯平均</dt>
+              <dd><span>{formatAverage(average(timingStats.winDurationsMs))}</span><span>{formatAttemptAverage(average(timingStats.winAttempts))}</span></dd>
+            </div>
           </dl>
           <p className="stats-note">平均值仅统计成功猜出的对局</p>
         </aside>
@@ -324,4 +336,8 @@ function formatDuration(durationMs: number) {
 
 function formatAverage(durationMs: number | null) {
   return durationMs === null ? "—" : formatDuration(durationMs);
+}
+
+function formatAttemptAverage(attempts: number | null) {
+  return attempts === null ? "—" : `${attempts.toFixed(1)} 次`;
 }

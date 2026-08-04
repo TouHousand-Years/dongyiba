@@ -195,6 +195,7 @@ test("无限模式生涯计时只统计成功对局，且同一局不会重复�
   recordCompletedTiming(won.game, storage);
   recordCompletedTiming(won.game, storage);
   assert.deepEqual(loadTimingStats(storage).winDurationsMs, [0]);
+  assert.deepEqual(loadTimingStats(storage).winAttempts, [1]);
   assert.equal(loadTimingStats(storage).completedSessionIds.length, 1);
 });
 
