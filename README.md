@@ -1,35 +1,32 @@
 # 东方一把
 
-一个以东方 Project 角色为题库的网页猜谜游戏。玩家有八次机会，每次猜测会按角色标签显示命中、接近或不符；后台可维护角色、别名、标签和值。
+一个无需登录、无需联网的东方 Project 角色猜谜网页小游戏。
 
-## Prerequisites
+## 本地运行
 
-- Node.js `>=22.13.0`
-
-## Quick Start
+项目依赖已经随仓库准备好。使用 Node.js `>=22.13.0`，在项目目录执行：
 
 ```bash
-npm install
 npm run dev
-npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+然后打开终端显示的本地地址即可。游戏题库、猜测进度以及后台编辑内容都保存在当前浏览器的 `localStorage` 中，断网也可以使用。
+
+也可以直接双击项目根目录的 `启动东方一把.cmd`。它会自动启动本地服务并打开浏览器；保持启动窗口运行即可使用网页，关闭窗口会停止服务。
 
 ## 页面
 
 - `/`：每日挑战与无限模式
-- `/admin`：标签与角色题库管理
-- D1：持久化题库和游戏会话
+- `/admin`：本地维护标签、角色、别名和标签值；支持 CSV 添加、替换与导出
 
-## 数据与部署
+后台的“恢复默认题库”会将本地编辑恢复为项目内置的 20 位角色与 5 个标签。
 
-后台写操作依赖站点访问策略保护。若将站点改成公开访问，应在 `/api/admin` 前增加管理员身份校验。
+CSV 的前三列固定为“角色名、别名、启用”，后续列是标签名。表头与当前题库一致时可以添加或替换；表头不同时只能替换，替换后会按新表头重建标签。建议先导出当前题库作为填写模板。
 
-## Useful Commands
+## 验证
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: 构建后运行核心判定与页面渲染测试
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+```bash
+npm test
+```
 
+测试会先构建网页，再检查页面不依赖 `/api` 请求，并验证本地题库、游戏判定和管理操作。

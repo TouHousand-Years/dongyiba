@@ -2,45 +2,45 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { GuessFeedback, TagDefinition } from "./game-core";
-
-type Guess = { id: number; name: string; feedback: GuessFeedback[] };
-type GameState = {
-  sessionId: string;
-  challengeNumber: number;
-  mode: "daily" | "unlimited";
-  maxAttempts: number;
-  names: string[];
-  tags: TagDefinition[];
-};
+import {
+  createLocalGame,
+  getLocalAnswerName,
+  loadLocalGame,
+  saveLocalGame,
+  submitLocalGuess,
+  type LocalGame,
+  type LocalGameMode,
+} from "./local-game";
+import { loadLocalCatalog } from "./local-catalog";
 
 export function GameBoard() {
-  const [game, setGame] = useState<GameState | null>(null);
-  const [mode, setMode] = useState<"daily" | "unlimited">("daily");
+  const [game, setGame] = useState<LocalGame | null>(null);
+  const [mode, setMode] = useState<LocalGameMode>("daily");
   const [query, setQuery] = useState("");
-  const [guesses, setGuesses] = useState<Guess[]>([]);
-  const [message, setMessage] = useState("正在准备今天的符卡……");
+  const [message, setMessage] = useState("正在读取本地题库……");
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
-  async function start(nextMode = mode) {
+  function start(nextMode: LocalGameMode = mode, forceNew = false) {
     setBusy(true);
     try {
-      const response = await fetch("/api/game", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "start", mode: nextMode }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setGame(data);
-      setGuesses([]);
-      setAnswer("");
+      const catalog = loadLocalCatalog();
+      const restored = forceNew ? null : loadLocalGame(nextMode, catalog);
+      const nextGame = restored ?? createLocalGame(catalog, nextMode);
+      if (!restored) saveLocalGame(nextGame);
+      setGame(nextGame);
       setQuery("");
-      setMessage(nextMode === "daily" ? "输入角色名，开始今天这一把。" : "新角色已藏好，来猜吧。");
+      setAnswer(nextGame.completed ? getLocalAnswerName(catalog, nextGame) : "");
+      setMessage(
+        nextGame.completed
+          ? `本局已结束，答案是 ${getLocalAnswerName(catalog, nextGame)}。`
+          : nextMode === "daily"
+            ? "输入角色名，开始今天这一把。"
+            : "新角色已藏好，来猜吧。",
+      );
     } catch {
-      setMessage("暂时无法连接幻想乡，请稍后再试。");
+      setMessage("本地题库尚未配置完成，请打开标签后台检查。");
     } finally {
       setBusy(false);
     }
@@ -49,43 +49,40 @@ export function GameBoard() {
   useEffect(() => {
     // Initial data loading intentionally hydrates this client-only game board.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void start("daily");
+    start("daily");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const suggestions = useMemo(() => {
     if (!game || query.trim().length < 1) return [];
     return game.names
-      .filter((name) => name.includes(query.trim()) && !guesses.some((guess) => guess.name === name))
+      .filter((name) => name.includes(query.trim()) && !game.guesses.some((guess) => guess.name === name))
       .slice(0, 6);
-  }, [game, guesses, query]);
+  }, [game, query]);
 
-  async function submit(event: FormEvent) {
+  function submit(event: FormEvent) {
     event.preventDefault();
     if (!game || !query.trim() || answer || busy) return;
     setBusy(true);
     try {
-      const response = await fetch("/api/game", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "guess", sessionId: game.sessionId, name: query }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setMessage(data.error ?? "没有找到这位角色。");
+      const result = submitLocalGuess(loadLocalCatalog(), game, query);
+      if (!result.ok) {
+        setMessage(result.error);
         return;
       }
-      setGuesses((current) => [...current, data.guess]);
+      setGame(result.game);
+      saveLocalGame(result.game);
       setQuery("");
-      setMessage(data.message);
-      if (data.answer) setAnswer(data.answer);
+      setMessage(result.message);
+      if (result.answer) setAnswer(result.answer);
     } catch {
-      setMessage("这次猜测被境界吞掉了，请重试。");
+      setMessage("这次猜测被本地题库拒绝了，请重试。");
     } finally {
       setBusy(false);
     }
   }
 
+  const guesses = game?.guesses ?? [];
   const attemptsLeft = Math.max(0, (game?.maxAttempts ?? 8) - guesses.length);
 
   return (
@@ -94,6 +91,7 @@ export function GameBoard() {
       <div className="mist mist-two" />
       <header className="topbar">
         <p className="challenge">每日挑战 #{game?.challengeNumber ?? "—"}</p>
+        <span className="local-badge" title="题库与进度只保存在当前浏览器">本地模式</span>
         <Link className="admin-link" href="/admin">标签后台</Link>
         <button className="ghost-button" onClick={() => setShowHelp(true)}>游戏玩法</button>
       </header>
@@ -118,7 +116,7 @@ export function GameBoard() {
               key={item}
               className={mode === item ? "active" : ""}
               aria-pressed={mode === item}
-              onClick={() => { setMode(item); void start(item); }}
+              onClick={() => { setMode(item); start(item, true); }}
             >
               {item === "daily" ? "每日挑战" : "无限模式"}
             </button>
@@ -166,12 +164,15 @@ export function GameBoard() {
                 {[...guesses].reverse().map((guess) => (
                   <tr key={`${guess.id}-${guess.name}`}>
                     <th>{guess.name}</th>
-                    {guess.feedback.map((cell) => (
-                      <td key={cell.tagId} className={`result-${cell.state}`}>
-                        <span>{cell.value}</span>
-                        {cell.direction && <i>{cell.direction === "higher" ? "↑" : "↓"}</i>}
-                      </td>
-                    ))}
+                    {game.tags.map((tag) => {
+                      const cell = guess.feedback.find((item) => item.tagId === tag.id);
+                      return (
+                        <td key={tag.id} className={`result-${cell?.state ?? "miss"}`}>
+                          <span>{cell?.value ?? "未知"}</span>
+                          {cell?.direction && <i>{cell.direction === "higher" ? "↑" : "↓"}</i>}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -180,7 +181,7 @@ export function GameBoard() {
         )}
 
         {answer && (
-          <button className="again-button" onClick={() => void start(mode)}>
+          <button className="again-button" onClick={() => start(mode, true)}>
             {mode === "daily" ? "再看一遍" : "下一位角色"}
           </button>
         )}
@@ -192,7 +193,7 @@ export function GameBoard() {
         </div>
       </section>
 
-      <footer>以爱与弹幕制作 · 非官方东方 Project 同人小游戏</footer>
+      <footer>以爱与弹幕制作 · 非官方东方 Project 同人小游戏 · 数据保存在本机浏览器</footer>
 
       {showHelp && (
         <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
@@ -204,6 +205,7 @@ export function GameBoard() {
             <div className="help-row"><i className="match" /><span><b>命中</b>：这个标签完全一致。</span></div>
             <div className="help-row"><i className="close" /><span><b>接近</b>：数值标签相差不超过 5。</span></div>
             <div className="help-row"><i className="miss" /><span><b>不符</b>：继续缩小范围。箭头提示答案更高或更低。</span></div>
+            <p className="local-help-note">本地模式：无需登录或联网，题库和进度只保存在当前浏览器。</p>
           </section>
         </div>
       )}

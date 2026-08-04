@@ -1,87 +1,166 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {
+  applyCatalogMutation,
+  loadLocalCatalog,
+  resetLocalCatalog,
+  saveLocalCatalog,
+  type CatalogMutation,
+  type LocalCatalog,
+  type LocalCharacter,
+  type LocalTag,
+} from "../local-catalog";
+import {
+  exportCatalogCsv,
+  hasSameCsvHeaders,
+  importCatalogCsv,
+  parseCatalogCsv,
+  type CatalogCsvPreview,
+} from "../catalog-csv";
 
-type Tag = { id: number; name: string; kind: "exact" | "ordered"; unit: string; sort_order: number; active: number };
-type Character = { id: number; name: string; aliases: string; active: number };
-type Value = { character_id: number; tag_id: number; value: string };
-type Catalog = { tags: Tag[]; characters: Character[]; values: Value[] };
-type TagDraft = { id?: number; name: string; kind: "exact" | "ordered"; unit: string; sortOrder: number; active: boolean };
-type CharacterDraft = { id?: number; name: string; aliases: string; active: boolean; values: Record<string, string> };
+type TagDraft = {
+  id?: number;
+  name: string;
+  kind: "exact" | "ordered";
+  unit: string;
+  sortOrder: number;
+  active: boolean;
+};
+
+type CharacterDraft = {
+  id?: number;
+  name: string;
+  aliases: string;
+  active: boolean;
+  values: Record<string, string>;
+};
 
 const emptyTag: TagDraft = { name: "", kind: "exact", unit: "", sortOrder: 60, active: true };
 const emptyCharacter: CharacterDraft = { name: "", aliases: "", active: true, values: {} };
 
 export function AdminPanel() {
-  const [catalog, setCatalog] = useState<Catalog>({ tags: [], characters: [], values: [] });
+  const [catalog, setCatalog] = useState<LocalCatalog>({ tags: [], characters: [], values: [] });
   const [tagDraft, setTagDraft] = useState<TagDraft>(emptyTag);
   const [characterDraft, setCharacterDraft] = useState<CharacterDraft>(emptyCharacter);
-  const [notice, setNotice] = useState("正在读取题库……");
+  const [notice, setNotice] = useState("正在读取本地题库……");
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
+  const [csvPreview, setCsvPreview] = useState<CatalogCsvPreview | null>(null);
+  const [csvFilename, setCsvFilename] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  async function refresh() {
-    const response = await fetch("/api/admin");
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
+  function refresh() {
+    const data = loadLocalCatalog();
     setCatalog(data);
-    setNotice(`已载入 ${data.characters.length} 位角色、${data.tags.length} 个标签。`);
+    setNotice(`本地题库已载入 ${data.characters.length} 位角色、${data.tags.length} 个标签。`);
   }
 
   useEffect(() => {
     // Initial data loading intentionally hydrates this client-only admin panel.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh().catch(() => setNotice("题库读取失败。"));
+    refresh();
   }, []);
 
-  async function mutate(payload: object, success: string) {
+  function mutate(payload: CatalogMutation, success: string): boolean {
     setBusy(true);
     try {
-      const response = await fetch("/api/admin", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      await refresh();
-      setNotice(success);
+      const next = applyCatalogMutation(catalog, payload);
+      saveLocalCatalog(next);
+      setCatalog(next);
+      setNotice(`${success} 数据已保存到本机浏览器。`);
+      return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "操作失败。");
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  async function saveTag(event: FormEvent) {
+  function saveTag(event: FormEvent) {
     event.preventDefault();
-    await mutate({ action: "saveTag", ...tagDraft }, tagDraft.id ? "标签已更新。" : "新标签已加入。");
-    setTagDraft(emptyTag);
+    const saved = mutate({ action: "saveTag", ...tagDraft }, tagDraft.id ? "标签已更新。" : "新标签已加入。");
+    if (saved) setTagDraft({ ...emptyTag });
   }
 
-  function editCharacter(character: Character) {
+  function editCharacter(character: LocalCharacter) {
     const values = Object.fromEntries(
-      catalog.values.filter((item) => item.character_id === character.id).map((item) => [String(item.tag_id), item.value]),
+      catalog.values
+        .filter((item) => item.characterId === character.id)
+        .map((item) => [String(item.tagId), item.value]),
     );
     setCharacterDraft({
       id: character.id,
       name: character.name,
-      aliases: (JSON.parse(character.aliases) as string[]).join("、"),
-      active: Boolean(character.active),
+      aliases: character.aliases.join("、"),
+      active: character.active,
       values,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function saveCharacter(event: FormEvent) {
+  function saveCharacter(event: FormEvent) {
     event.preventDefault();
-    await mutate({
+    const saved = mutate({
       action: "saveCharacter",
       ...characterDraft,
       aliases: characterDraft.aliases.split(/[、,，]/),
     }, characterDraft.id ? "角色资料已更新。" : "新角色已加入题库。");
-    setCharacterDraft(emptyCharacter);
+    if (saved) setCharacterDraft({ ...emptyCharacter, values: {} });
+  }
+
+  function restoreDefaults() {
+    if (!window.confirm("恢复默认题库会覆盖当前本地编辑，确定继续吗？")) return;
+    const next = resetLocalCatalog();
+    setCatalog(next);
+    setTagDraft({ ...emptyTag });
+    setCharacterDraft({ ...emptyCharacter, values: {} });
+    setNotice("默认题库已恢复，并保存到本机浏览器。");
+  }
+
+  async function selectCsv(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const preview = parseCatalogCsv(await file.text());
+      setCsvPreview(preview);
+      setCsvFilename(file.name);
+      const same = hasSameCsvHeaders(catalog, preview);
+      setNotice(`已读取 ${file.name}：${preview.rows.length} 位角色、${preview.tagNames.length} 个标签。${same ? "表头一致，可添加或替换。" : "表头不同，只能替换当前题库。"}`);
+    } catch (error) {
+      setCsvPreview(null);
+      setCsvFilename("");
+      setNotice(error instanceof Error ? error.message : "CSV 读取失败。");
+    }
+  }
+
+  function importCsv(mode: "append" | "replace") {
+    if (!csvPreview) return;
+    if (mode === "replace" && !window.confirm("替换会覆盖当前全部标签和角色，确定继续吗？")) return;
+    try {
+      const next = importCatalogCsv(catalog, csvPreview, mode);
+      saveLocalCatalog(next);
+      setCatalog(next);
+      setCsvPreview(null);
+      setCsvFilename("");
+      if (fileInput.current) fileInput.current.value = "";
+      setNotice(mode === "append" ? `已从 CSV 添加 ${csvPreview.rows.length} 位角色。` : `已用 CSV 替换题库，共 ${csvPreview.rows.length} 位角色。`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "CSV 导入失败。");
+    }
+  }
+
+  function exportCsv() {
+    const blob = new Blob([exportCatalogCsv(catalog)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `东方一把题库-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setNotice(`已导出 ${catalog.characters.length} 位角色的 CSV 文件。`);
   }
 
   const filtered = useMemo(
@@ -97,16 +176,43 @@ export function AdminPanel() {
           <h1>内容后台</h1>
           <p>维护角色、别名和每一列判定标签。</p>
         </div>
-        <Link href="/">返回游戏</Link>
+        <div className="admin-actions">
+          <button className="admin-reset" onClick={restoreDefaults}>恢复默认题库</button>
+          <Link href="/">返回游戏</Link>
+        </div>
       </header>
 
-      <p className="admin-notice" role="status">{notice}</p>
+      <p className="admin-notice" role="status">{notice} 无需登录或联网，所有改动只保存在当前浏览器。</p>
+
+      <section className="admin-card csv-card">
+        <div className="section-title">
+          <div><span>CSV</span><h2>导入与导出</h2></div>
+          <button onClick={exportCsv}>导出当前题库</button>
+        </div>
+        <div className="csv-tools">
+          <label className="csv-picker">
+            <span>选择 CSV 文件</span>
+            <input ref={fileInput} type="file" accept=".csv,text/csv" onChange={selectCsv} />
+          </label>
+          <p>{csvFilename || "表头格式：角色名、别名、启用，后续每列为一个标签。"}</p>
+          {csvPreview && (
+            <div className="csv-import-actions">
+              <button
+                className="admin-primary"
+                disabled={!hasSameCsvHeaders(catalog, csvPreview)}
+                onClick={() => importCsv("append")}
+              >添加到当前题库</button>
+              <button className="admin-replace" onClick={() => importCsv("replace")}>替换当前题库</button>
+            </div>
+          )}
+        </div>
+      </section>
 
       <div className="admin-grid">
         <section className="admin-card">
           <div className="section-title">
             <div><span>01</span><h2>判定标签</h2></div>
-            <button onClick={() => setTagDraft(emptyTag)}>＋ 新标签</button>
+            <button onClick={() => setTagDraft({ ...emptyTag })}>＋ 新标签</button>
           </div>
           <form className="admin-form compact" onSubmit={saveTag}>
             <label>标签名称<input value={tagDraft.name} onChange={(event) => setTagDraft({ ...tagDraft, name: event.target.value })} placeholder="例如：瞳色" required /></label>
@@ -122,12 +228,12 @@ export function AdminPanel() {
             <button className="admin-primary" disabled={busy}>{tagDraft.id ? "保存修改" : "添加标签"}</button>
           </form>
           <div className="tag-list">
-            {catalog.tags.map((tag) => (
+            {catalog.tags.map((tag: LocalTag) => (
               <div className="tag-row" key={tag.id}>
-                <div><b>{tag.name}</b><small>{tag.kind === "ordered" ? "有序数值" : "精确匹配"} · 排序 {tag.sort_order}{!tag.active && " · 已隐藏"}</small></div>
+                <div><b>{tag.name}</b><small>{tag.kind === "ordered" ? "有序数值" : "精确匹配"} · 排序 {tag.sortOrder}{!tag.active && " · 已隐藏"}</small></div>
                 <div>
-                  <button onClick={() => setTagDraft({ id: tag.id, name: tag.name, kind: tag.kind, unit: tag.unit, sortOrder: tag.sort_order, active: Boolean(tag.active) })}>编辑</button>
-                  <button className="danger" onClick={() => confirm(`删除标签“${tag.name}”？`) && void mutate({ action: "deleteTag", id: tag.id }, "标签已删除。")}>删除</button>
+                  <button onClick={() => setTagDraft({ id: tag.id, name: tag.name, kind: tag.kind, unit: tag.unit, sortOrder: tag.sortOrder, active: tag.active })}>编辑</button>
+                  <button className="danger" onClick={() => window.confirm(`删除标签“${tag.name}”？`) && mutate({ action: "deleteTag", id: tag.id }, "标签已删除。")}>删除</button>
                 </div>
               </div>
             ))}
@@ -137,7 +243,7 @@ export function AdminPanel() {
         <section className="admin-card">
           <div className="section-title">
             <div><span>02</span><h2>{characterDraft.id ? "编辑角色" : "添加角色"}</h2></div>
-            {characterDraft.id && <button onClick={() => setCharacterDraft(emptyCharacter)}>退出编辑</button>}
+            {characterDraft.id && <button onClick={() => setCharacterDraft({ ...emptyCharacter, values: {} })}>退出编辑</button>}
           </div>
           <form className="admin-form" onSubmit={saveCharacter}>
             <label>角色名<input value={characterDraft.name} onChange={(event) => setCharacterDraft({ ...characterDraft, name: event.target.value })} placeholder="完整角色名" required /></label>
@@ -169,15 +275,15 @@ export function AdminPanel() {
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索角色" />
         </div>
         <div className="character-list">
-          {filtered.map((character) => (
+          {filtered.map((character: LocalCharacter) => (
             <article key={character.id}>
               <div className="avatar-mark">{character.name.slice(0, 1)}</div>
               <div>
                 <h3>{character.name}</h3>
-                <p>{(JSON.parse(character.aliases) as string[]).join(" / ") || "暂无别名"}{!character.active && " · 已停用"}</p>
+                <p>{character.aliases.join(" / ") || "暂无别名"}{!character.active && " · 已停用"}</p>
               </div>
               <button onClick={() => editCharacter(character)}>编辑</button>
-              <button className="danger" onClick={() => confirm(`删除角色“${character.name}”？`) && void mutate({ action: "deleteCharacter", id: character.id }, "角色已删除。")}>删除</button>
+              <button className="danger" onClick={() => window.confirm(`删除角色“${character.name}”？`) && mutate({ action: "deleteCharacter", id: character.id }, "角色已删除。")}>删除</button>
             </article>
           ))}
         </div>

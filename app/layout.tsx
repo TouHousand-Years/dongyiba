@@ -10,18 +10,18 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: base,
     title: "东方一把｜猜东方 Project 角色",
-    description: "八次机会，根据角色标签反馈猜出今天的东方 Project 角色。",
+    description: "无需登录或联网，在本地用八次机会猜出今天的东方 Project 角色。",
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
     openGraph: {
       title: "东方一把",
-      description: "今天藏在幻想乡的是谁？",
+      description: "本地离线猜东方 Project 角色小游戏。",
       type: "website",
       images: [{ url: new URL("/og.png", base), width: 1200, height: 630, alt: "东方一把" }],
     },
     twitter: {
       card: "summary_large_image",
       title: "东方一把",
-      description: "今天藏在幻想乡的是谁？",
+      description: "本地离线猜东方 Project 角色小游戏。",
       images: [new URL("/og.png", base)],
     },
   };
