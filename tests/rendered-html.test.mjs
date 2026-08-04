@@ -13,7 +13,7 @@ test("玩家首页使用真实游戏组件和正式元数据", async () => {
   assert.match(layout, /og\.png/);
   assert.match(game, /每日挑战/);
   assert.match(game, /无限模式/);
-  assert.match(game, /本地模式/);
+  assert.doesNotMatch(`${page}${layout}${game}`, /无需登录|无需联网|本地模式|本机浏览器|当前浏览器|本地离线/);
   assert.doesNotMatch(game, /fetch\(/);
   assert.doesNotMatch(`${page}${layout}${game}`, /codex-preview|react-loading-skeleton/);
 });
@@ -34,6 +34,7 @@ test("游戏页与后台共用本地题库，不请求远程服务", async () =>
   assert.match(game, /submitLocalGuess/);
   assert.match(game, /dongyiba:games:v1/);
   assert.doesNotMatch(`${panel}${game}`, /fetch\(/);
+  assert.doesNotMatch(panel, /无需登录|无需联网|本地模式|本机浏览器|当前浏览器|本地题库/);
 });
 
 test("提供双击启动本地网页的快捷脚本", async () => {

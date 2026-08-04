@@ -44,7 +44,7 @@ export function AdminPanel() {
   const [catalog, setCatalog] = useState<LocalCatalog>({ tags: [], characters: [], values: [] });
   const [tagDraft, setTagDraft] = useState<TagDraft>(emptyTag);
   const [characterDraft, setCharacterDraft] = useState<CharacterDraft>(emptyCharacter);
-  const [notice, setNotice] = useState("正在读取本地题库……");
+  const [notice, setNotice] = useState("正在读取题库……");
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [csvPreview, setCsvPreview] = useState<CatalogCsvPreview | null>(null);
@@ -54,7 +54,7 @@ export function AdminPanel() {
   function refresh() {
     const data = loadLocalCatalog();
     setCatalog(data);
-    setNotice(`本地题库已载入 ${data.characters.length} 位角色、${data.tags.length} 个标签。`);
+    setNotice(`题库已载入 ${data.characters.length} 位角色、${data.tags.length} 个标签。`);
   }
 
   useEffect(() => {
@@ -69,7 +69,7 @@ export function AdminPanel() {
       const next = applyCatalogMutation(catalog, payload);
       saveLocalCatalog(next);
       setCatalog(next);
-      setNotice(`${success} 数据已保存到本机浏览器。`);
+      setNotice(success);
       return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "操作失败。");
@@ -112,12 +112,12 @@ export function AdminPanel() {
   }
 
   function restoreDefaults() {
-    if (!window.confirm("恢复默认题库会覆盖当前本地编辑，确定继续吗？")) return;
+    if (!window.confirm("恢复默认题库会覆盖当前编辑，确定继续吗？")) return;
     const next = resetLocalCatalog();
     setCatalog(next);
     setTagDraft({ ...emptyTag });
     setCharacterDraft({ ...emptyCharacter, values: {} });
-    setNotice("默认题库已恢复，并保存到本机浏览器。");
+    setNotice("默认题库已恢复。");
   }
 
   async function selectCsv(event: ChangeEvent<HTMLInputElement>) {
@@ -182,7 +182,7 @@ export function AdminPanel() {
         </div>
       </header>
 
-      <p className="admin-notice" role="status">{notice} 无需登录或联网，所有改动只保存在当前浏览器。</p>
+      <p className="admin-notice" role="status">{notice}</p>
 
       <section className="admin-card csv-card">
         <div className="section-title">

@@ -17,7 +17,7 @@ export function GameBoard() {
   const [game, setGame] = useState<LocalGame | null>(null);
   const [mode, setMode] = useState<LocalGameMode>("daily");
   const [query, setQuery] = useState("");
-  const [message, setMessage] = useState("正在读取本地题库……");
+  const [message, setMessage] = useState("正在读取题库……");
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -40,7 +40,7 @@ export function GameBoard() {
             : "新角色已藏好，来猜吧。",
       );
     } catch {
-      setMessage("本地题库尚未配置完成，请打开标签后台检查。");
+      setMessage("题库尚未配置完成，请打开标签后台检查。");
     } finally {
       setBusy(false);
     }
@@ -76,7 +76,7 @@ export function GameBoard() {
       setMessage(result.message);
       if (result.answer) setAnswer(result.answer);
     } catch {
-      setMessage("这次猜测被本地题库拒绝了，请重试。");
+      setMessage("这次猜测未能完成，请重试。");
     } finally {
       setBusy(false);
     }
@@ -91,7 +91,6 @@ export function GameBoard() {
       <div className="mist mist-two" />
       <header className="topbar">
         <p className="challenge">每日挑战 #{game?.challengeNumber ?? "—"}</p>
-        <span className="local-badge" title="题库与进度只保存在当前浏览器">本地模式</span>
         <Link className="admin-link" href="/admin">标签后台</Link>
         <button className="ghost-button" onClick={() => setShowHelp(true)}>游戏玩法</button>
       </header>
@@ -193,7 +192,7 @@ export function GameBoard() {
         </div>
       </section>
 
-      <footer>以爱与弹幕制作 · 非官方东方 Project 同人小游戏 · 数据保存在本机浏览器</footer>
+      <footer>以爱与弹幕制作 · 非官方东方 Project 同人小游戏</footer>
 
       {showHelp && (
         <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
@@ -205,7 +204,6 @@ export function GameBoard() {
             <div className="help-row"><i className="match" /><span><b>命中</b>：这个标签完全一致。</span></div>
             <div className="help-row"><i className="close" /><span><b>接近</b>：数值标签相差不超过 5。</span></div>
             <div className="help-row"><i className="miss" /><span><b>不符</b>：继续缩小范围。箭头提示答案更高或更低。</span></div>
-            <p className="local-help-note">本地模式：无需登录或联网，题库和进度只保存在当前浏览器。</p>
           </section>
         </div>
       )}
