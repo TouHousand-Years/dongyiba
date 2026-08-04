@@ -112,10 +112,11 @@ test("CSV 导出后可按相同表头添加角色", () => {
   const exported = exportCatalogCsv(catalog);
   const preview = parseCatalogCsv(exported);
   assert.equal(hasSameCsvHeaders(catalog, preview), true);
+  assert.deepEqual(preview.tagKinds, ["ordered", "exact", "exact-multi", "exact", "category-multi"]);
   assert.equal(preview.rows.length, 20);
   assert.equal(preview.rows[0][0], "博丽灵梦");
 
-  const addition = parseCatalogCsv("角色名,别名,启用,初登场年份,发色,活动区域,身份,种族\r\n测试角色,测试、测测,是,2026,紫色,人间之里,测试员,妖怪\r\n");
+  const addition = parseCatalogCsv("角色名,别名,启用,初登场年份（类型：ordered）,发色（类型：exact）,活动区域（类型：exact-multi）,身份（类型：exact）,种族（类型：category-multi）\r\n测试角色,测试、测测,是,2026,紫色,人间之里,测试员,妖怪\r\n");
   const added = importCatalogCsv(catalog, addition, "append");
   assert.equal(added.characters.length, 21);
   const character = added.characters.find((item) => item.name === "测试角色")!;
@@ -125,15 +126,35 @@ test("CSV 导出后可按相同表头添加角色", () => {
 
 test("不同 CSV 表头禁止添加，但可替换并重建标签", () => {
   const catalog = createDefaultCatalog();
-  const preview = parseCatalogCsv('角色名,别名,启用,阵营,"称号,备注"\n"新,角色",简称,否,中立,"带,逗号"\n');
+  const preview = parseCatalogCsv('角色名,别名,启用,阵营（类型：category）,"称号,备注（类型：exact-multi）"\n"新,角色",简称,否,阵营 > 中立,"类别 > 带,逗号"\n');
   assert.equal(hasSameCsvHeaders(catalog, preview), false);
   assert.throws(() => importCatalogCsv(catalog, preview, "append"), /只能选择替换/);
 
   const replaced = importCatalogCsv(catalog, preview, "replace");
   assert.deepEqual(replaced.tags.map((tag) => tag.name), ["称号,备注", "阵营"]);
+  assert.deepEqual(replaced.tags.map((tag) => tag.kind), ["exact-multi", "category"]);
   assert.equal(replaced.characters[0].name, "新,角色");
   assert.equal(replaced.characters[0].active, false);
   assert.deepEqual(replaced.values.map((item) => item.value), ["中立", "带,逗号"]);
+});
+
+test("CSV 标签只有名称和类型都相同才匹配", () => {
+  const catalog = createDefaultCatalog();
+  const sameNameDifferentKind = parseCatalogCsv(
+    "角色名,别名,启用,初登场年份（类型：exact）,发色（类型：exact）,活动区域（类型：exact-multi）,身份（类型：exact）,种族（类型：category-multi）\n测试角色,,是,2026,紫色,人间之里,测试员,妖怪\n",
+  );
+
+  assert.equal(hasSameCsvHeaders(catalog, sameNameDifferentKind), false);
+  assert.throws(() => importCatalogCsv(catalog, sameNameDifferentKind, "append"), /只能选择替换/);
+  const replaced = importCatalogCsv(catalog, sameNameDifferentKind, "replace");
+  assert.equal(replaced.tags.find((tag) => tag.name === "初登场年份")?.kind, "exact");
+});
+
+test("CSV 标签列表头必须记录类型", () => {
+  assert.throws(
+    () => parseCatalogCsv("角色名,别名,启用,阵营\n测试角色,,是,中立\n"),
+    /标签列表头.*格式无效/,
+  );
 });
 
 test("按类匹配标签可保存大类和小类并通过 CSV 往返", () => {

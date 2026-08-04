@@ -1,16 +1,35 @@
 import { formatMultiValueText, parseMultiValueText, sortTagsByName, type LocalCatalog, type LocalCharacter, type LocalTag, type LocalValue } from "./local-catalog";
+import type { TagKind } from "./game-core";
 
 export const CSV_BASE_HEADERS = ["角色名", "别名", "启用"] as const;
 
 export type CatalogCsvPreview = {
   headers: string[];
   tagNames: string[];
+  tagKinds: TagKind[];
   rows: string[][];
 };
 
 export type CatalogCsvImportMode = "append" | "replace";
 
 export const CATEGORY_VALUE_SEPARATOR = " > ";
+
+const TAG_KINDS: readonly TagKind[] = ["exact", "ordered", "category", "exact-multi", "category-multi"];
+const TAG_HEADER_PATTERN = /^(.*)（类型：(exact|ordered|category|exact-multi|category-multi)）$/;
+
+function formatTagHeader(tag: Pick<LocalTag, "name" | "kind">): string {
+  return `${tag.name}（类型：${tag.kind}）`;
+}
+
+function parseTagHeader(header: string): Pick<LocalTag, "name" | "kind"> {
+  const match = TAG_HEADER_PATTERN.exec(header);
+  const name = match?.[1].trim() ?? "";
+  const kind = match?.[2];
+  if (!name || !TAG_KINDS.includes(kind as TagKind)) {
+    throw new Error(`CSV 标签列表头“${header}”格式无效，应为“标签名（类型：类型代码）”。`);
+  }
+  return { name, kind: kind as TagKind };
+}
 
 function parseTagValue(rawValue: string, tag: LocalTag): Pick<LocalValue, "value" | "category" | "entries"> {
   if (tag.kind === "exact-multi" || tag.kind === "category-multi") {
@@ -72,7 +91,7 @@ function parseCsvRows(source: string): string[][] {
 }
 
 export function getCatalogCsvHeaders(catalog: LocalCatalog): string[] {
-  return [...CSV_BASE_HEADERS, ...sortTagsByName(catalog.tags).map((tag) => tag.name)];
+  return [...CSV_BASE_HEADERS, ...sortTagsByName(catalog.tags).map(formatTagHeader)];
 }
 
 export function hasSameCsvHeaders(catalog: LocalCatalog, preview: CatalogCsvPreview): boolean {
@@ -92,6 +111,10 @@ export function parseCatalogCsv(source: string): CatalogCsvPreview {
   if (headers.some((header) => !header)) throw new Error("CSV 表头不能包含空列名。");
   if (new Set(headers).size !== headers.length) throw new Error("CSV 表头不能包含重复列名。");
 
+  const csvTags = headers.slice(CSV_BASE_HEADERS.length).map(parseTagHeader);
+  const tagNames = csvTags.map((tag) => tag.name);
+  if (new Set(tagNames).size !== tagNames.length) throw new Error("CSV 表头不能包含同名标签。");
+
   const dataRows = rows.slice(1).map((row, index) => {
     if (row.length > headers.length) throw new Error(`CSV 第 ${index + 2} 行的列数多于表头。`);
     return Array.from({ length: headers.length }, (_, column) => row[column]?.trim() ?? "");
@@ -101,7 +124,7 @@ export function parseCatalogCsv(source: string): CatalogCsvPreview {
   if (names.some((name) => !name)) throw new Error("CSV 中的角色名不能为空。");
   if (new Set(names).size !== names.length) throw new Error("CSV 中不能包含重复角色名。");
 
-  return { headers, tagNames: headers.slice(CSV_BASE_HEADERS.length), rows: dataRows };
+  return { headers, tagNames, tagKinds: csvTags.map((tag) => tag.kind), rows: dataRows };
 }
 
 function parseActive(value: string): boolean {
@@ -156,10 +179,11 @@ export function importCatalogCsv(
   }
 
   const tags = preview.tagNames.map((name, index) => {
-    const existing = catalog.tags.find((tag) => tag.name === name);
+    const kind = preview.tagKinds[index];
+    const existing = catalog.tags.find((tag) => tag.name === name && tag.kind === kind);
     return existing
       ? { ...existing, id: index + 1 }
-      : { id: index + 1, name, kind: "exact" as const, unit: "", active: true };
+      : { id: index + 1, name, kind, unit: "", active: true };
   });
   const replacement = createCharactersAndValues(preview.rows, tags, 1);
   return { tags: sortTagsByName(tags), ...replacement };
@@ -171,7 +195,7 @@ function csvCell(value: string): string {
 
 export function exportCatalogCsv(catalog: LocalCatalog): string {
   const tags = sortTagsByName(catalog.tags);
-  const headers = [...CSV_BASE_HEADERS, ...tags.map((tag) => tag.name)];
+  const headers = [...CSV_BASE_HEADERS, ...tags.map(formatTagHeader)];
   const valueMap = new Map(catalog.values.map((item) => [`${item.characterId}:${item.tagId}`, item]));
   const rows = catalog.characters.map((character) => [
     character.name,

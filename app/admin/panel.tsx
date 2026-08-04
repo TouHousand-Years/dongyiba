@@ -224,7 +224,7 @@ export function AdminPanel() {
             <span>选择 CSV 文件</span>
             <input ref={fileInput} type="file" accept=".csv,text/csv" onChange={selectCsv} />
           </label>
-          <p>{csvFilename || "表头格式：角色名、别名、启用，后续每列为一个标签。"}</p>
+          <p>{csvFilename || "表头格式：角色名、别名、启用，后续每列为“标签名（类型：类型代码）”。"}</p>
           {csvPreview && (
             <div className="csv-import-actions">
               <button
