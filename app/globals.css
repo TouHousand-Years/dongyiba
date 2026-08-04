@@ -92,6 +92,7 @@ h1 { margin: 0; font-size: clamp(44px, 8vw, 72px); font-weight: 700; letter-spac
 .feedback-table th { font-size: 12px; color: var(--muted); font-weight: 600; padding: 6px 4px; }
 .feedback-table tbody th { color: var(--ink); background: var(--paper-deep); border-radius: 8px; font-family: "Noto Serif SC", serif; }
 .feedback-table td { height: 62px; padding: 6px; text-align: center; color: white; border-radius: 8px; font-size: 12px; font-weight: 700; animation: reveal .38s ease both; }
+.feedback-table td small { display: block; margin-bottom: 3px; font-size: 10px; font-weight: 500; opacity: .82; }
 .feedback-table td i { display: block; font-size: 18px; line-height: 1; font-style: normal; }
 .result-match { background: var(--green); }
 .result-close { background: var(--amber); }

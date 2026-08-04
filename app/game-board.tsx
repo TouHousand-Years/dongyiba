@@ -167,6 +167,7 @@ export function GameBoard() {
                       const cell = guess.feedback.find((item) => item.tagId === tag.id);
                       return (
                         <td key={tag.id} className={`result-${cell?.state ?? "miss"}`}>
+                          {cell?.category && <small>{cell.category}</small>}
                           <span>{cell?.value ?? "未知"}</span>
                           {cell?.direction && <i>{cell.direction === "higher" ? "↑" : "↓"}</i>}
                         </td>
@@ -202,7 +203,7 @@ export function GameBoard() {
             <h2 id="help-title">八次机会，找到她</h2>
             <p>输入任意候选角色。每次猜测后，标签会告诉你与答案的距离。</p>
             <div className="help-row"><i className="match" /><span><b>命中</b>：这个标签完全一致。</span></div>
-            <div className="help-row"><i className="close" /><span><b>接近</b>：数值标签相差不超过 5。</span></div>
+            <div className="help-row"><i className="close" /><span><b>接近</b>：数值标签相差不超过 5，或分类标签同大类但不同小类。</span></div>
             <div className="help-row"><i className="miss" /><span><b>不符</b>：继续缩小范围。箭头提示答案更高或更低。</span></div>
           </section>
         </div>

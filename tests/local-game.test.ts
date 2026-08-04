@@ -112,3 +112,29 @@ test("不同 CSV 表头禁止添加，但可替换并重建标签", () => {
   assert.equal(replaced.characters[0].active, false);
   assert.deepEqual(replaced.values.map((item) => item.value), ["中立", "带,逗号"]);
 });
+
+test("按类匹配标签可保存大类和小类并通过 CSV 往返", () => {
+  const catalog = applyCatalogMutation(createDefaultCatalog(), {
+    action: "saveTag",
+    name: "能力类型",
+    kind: "category",
+  });
+  const tag = catalog.tags.find((item) => item.name === "能力类型")!;
+  const withCharacter = applyCatalogMutation(catalog, {
+    action: "saveCharacter",
+    name: "分类测试角色",
+    values: { [String(tag.id)]: "风" },
+    categories: { [String(tag.id)]: "自然操纵" },
+  });
+  const character = withCharacter.characters.find((item) => item.name === "分类测试角色")!;
+  const storedValue = withCharacter.values.find((item) => item.characterId === character.id && item.tagId === tag.id)!;
+  assert.deepEqual(storedValue, { characterId: character.id, tagId: tag.id, value: "风", category: "自然操纵" });
+
+  const imported = importCatalogCsv(withCharacter, parseCatalogCsv(exportCatalogCsv(withCharacter)), "replace");
+  const importedTag = imported.tags.find((item) => item.name === "能力类型")!;
+  const importedCharacter = imported.characters.find((item) => item.name === "分类测试角色")!;
+  assert.deepEqual(
+    imported.values.find((item) => item.characterId === importedCharacter.id && item.tagId === importedTag.id),
+    { characterId: importedCharacter.id, tagId: importedTag.id, value: "风", category: "自然操纵" },
+  );
+});

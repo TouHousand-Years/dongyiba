@@ -23,7 +23,7 @@ import {
 type TagDraft = {
   id?: number;
   name: string;
-  kind: "exact" | "ordered";
+  kind: "exact" | "ordered" | "category";
   unit: string;
   active: boolean;
 };
@@ -34,10 +34,11 @@ type CharacterDraft = {
   aliases: string;
   active: boolean;
   values: Record<string, string>;
+  categories: Record<string, string>;
 };
 
 const emptyTag: TagDraft = { name: "", kind: "exact", unit: "", active: true };
-const emptyCharacter: CharacterDraft = { name: "", aliases: "", active: true, values: {} };
+const emptyCharacter: CharacterDraft = { name: "", aliases: "", active: true, values: {}, categories: {} };
 
 export function AdminPanel() {
   const [catalog, setCatalog] = useState<LocalCatalog>({ tags: [], characters: [], values: [] });
@@ -85,10 +86,12 @@ export function AdminPanel() {
   }
 
   function editCharacter(character: LocalCharacter) {
-    const values = Object.fromEntries(
-      catalog.values
-        .filter((item) => item.characterId === character.id)
-        .map((item) => [String(item.tagId), item.value]),
+    const characterValues = catalog.values.filter((item) => item.characterId === character.id);
+    const values = Object.fromEntries(characterValues.map((item) => [String(item.tagId), item.value]));
+    const categories = Object.fromEntries(
+      characterValues
+        .filter((item) => item.category)
+        .map((item) => [String(item.tagId), item.category ?? ""]),
     );
     setCharacterDraft({
       id: character.id,
@@ -96,6 +99,7 @@ export function AdminPanel() {
       aliases: character.aliases.join("、"),
       active: character.active,
       values,
+      categories,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -107,7 +111,7 @@ export function AdminPanel() {
       ...characterDraft,
       aliases: characterDraft.aliases.split(/[、,，]/),
     }, characterDraft.id ? "角色资料已更新。" : "新角色已加入题库。");
-    if (saved) setCharacterDraft({ ...emptyCharacter, values: {} });
+    if (saved) setCharacterDraft({ ...emptyCharacter, values: {}, categories: {} });
   }
 
   function restoreDefaults() {
@@ -115,7 +119,7 @@ export function AdminPanel() {
     const next = resetLocalCatalog();
     setCatalog(next);
     setTagDraft({ ...emptyTag });
-    setCharacterDraft({ ...emptyCharacter, values: {} });
+    setCharacterDraft({ ...emptyCharacter, values: {}, categories: {} });
     setNotice("默认题库已恢复。");
   }
 
@@ -220,6 +224,7 @@ export function AdminPanel() {
               <select value={tagDraft.kind} onChange={(event) => setTagDraft({ ...tagDraft, kind: event.target.value as TagDraft["kind"] })}>
                 <option value="exact">文本完全一致</option>
                 <option value="ordered">有序数值（支持接近与箭头）</option>
+                <option value="category">按类匹配（同大类标黄）</option>
               </select>
             </label>
             <label>单位<input value={tagDraft.unit} onChange={(event) => setTagDraft({ ...tagDraft, unit: event.target.value })} placeholder="可选，例如：年" /></label>
@@ -229,7 +234,7 @@ export function AdminPanel() {
           <div className="tag-list">
             {catalog.tags.map((tag: LocalTag) => (
               <div className="tag-row" key={tag.id}>
-                <div><b>{tag.name}</b><small>{tag.kind === "ordered" ? "有序数值" : "精确匹配"}{!tag.active && " · 已隐藏"}</small></div>
+                <div><b>{tag.name}</b><small>{{ exact: "精确匹配", ordered: "有序数值", category: "按类匹配" }[tag.kind]}{!tag.active && " · 已隐藏"}</small></div>
                 <div>
                   <button onClick={() => setTagDraft({ id: tag.id, name: tag.name, kind: tag.kind, unit: tag.unit, active: tag.active })}>编辑</button>
                   <button className="danger" onClick={() => window.confirm(`删除标签“${tag.name}”？`) && mutate({ action: "deleteTag", id: tag.id }, "标签已删除。")}>删除</button>
@@ -242,7 +247,7 @@ export function AdminPanel() {
         <section className="admin-card">
           <div className="section-title">
             <div><span>02</span><h2>{characterDraft.id ? "编辑角色" : "添加角色"}</h2></div>
-            {characterDraft.id && <button onClick={() => setCharacterDraft({ ...emptyCharacter, values: {} })}>退出编辑</button>}
+            {characterDraft.id && <button onClick={() => setCharacterDraft({ ...emptyCharacter, values: {}, categories: {} })}>退出编辑</button>}
           </div>
           <form className="admin-form" onSubmit={saveCharacter}>
             <label>角色名<input value={characterDraft.name} onChange={(event) => setCharacterDraft({ ...characterDraft, name: event.target.value })} placeholder="完整角色名" required /></label>
@@ -250,6 +255,17 @@ export function AdminPanel() {
             <div className="value-grid">
               {catalog.tags.map((tag) => (
                 <label key={tag.id}>{tag.name}
+                  {tag.kind === "category" && (
+                    <input
+                      type="text"
+                      value={characterDraft.categories[String(tag.id)] ?? ""}
+                      onChange={(event) => setCharacterDraft({
+                        ...characterDraft,
+                        categories: { ...characterDraft.categories, [String(tag.id)]: event.target.value },
+                      })}
+                      placeholder="大类"
+                    />
+                  )}
                   <input
                     type={tag.kind === "ordered" ? "number" : "text"}
                     value={characterDraft.values[String(tag.id)] ?? ""}
@@ -257,7 +273,7 @@ export function AdminPanel() {
                       ...characterDraft,
                       values: { ...characterDraft.values, [String(tag.id)]: event.target.value },
                     })}
-                    placeholder={tag.unit ? `数值（${tag.unit}）` : "标签值"}
+                    placeholder={tag.kind === "category" ? "小类" : tag.unit ? `数值（${tag.unit}）` : "标签值"}
                   />
                 </label>
               ))}

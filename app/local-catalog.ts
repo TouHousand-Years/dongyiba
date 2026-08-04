@@ -3,7 +3,7 @@ import type { TagDefinition } from "./game-core";
 export type LocalTag = {
   id: number;
   name: string;
-  kind: "exact" | "ordered";
+  kind: "exact" | "ordered" | "category";
   unit: string;
   active: boolean;
 };
@@ -19,6 +19,7 @@ export type LocalValue = {
   characterId: number;
   tagId: number;
   value: string;
+  category?: string;
 };
 
 export type LocalCatalog = {
@@ -34,7 +35,7 @@ export type CatalogMutation =
       action: "saveTag";
       id?: number;
       name?: string;
-      kind?: "exact" | "ordered";
+      kind?: "exact" | "ordered" | "category";
       unit?: string;
       active?: boolean;
     }
@@ -46,6 +47,7 @@ export type CatalogMutation =
       aliases?: string[];
       active?: boolean;
       values?: Record<string, string>;
+      categories?: Record<string, string>;
     }
   | { action: "deleteCharacter"; id: number };
 
@@ -143,7 +145,7 @@ function parseCatalog(value: string): LocalCatalog | null {
       return {
         id,
         name: item.name,
-        kind: item.kind === "ordered" ? "ordered" as const : "exact" as const,
+        kind: item.kind === "ordered" || item.kind === "category" ? item.kind : "exact",
         unit: typeof item.unit === "string" ? item.unit : "",
         active: item.active !== false && item.active !== 0,
       };
@@ -162,7 +164,12 @@ function parseCatalog(value: string): LocalCatalog | null {
       const characterId = Number(item.characterId);
       const tagId = Number(item.tagId);
       if (!Number.isInteger(characterId) || !Number.isInteger(tagId)) return null;
-      return { characterId, tagId, value: item.value };
+      return {
+        characterId,
+        tagId,
+        value: item.value,
+        ...(typeof item.category === "string" && item.category.trim() ? { category: item.category.trim() } : {}),
+      };
     });
 
     if (tags.some((item) => item === null) || characters.some((item) => item === null) || values.some((item) => item === null)) {
@@ -230,13 +237,24 @@ function assertUniqueName(items: Array<{ id: number; name: string }>, name: stri
   }
 }
 
-function updateCharacterValues(catalog: LocalCatalog, characterId: number, values: Record<string, string> = {}) {
+function updateCharacterValues(
+  catalog: LocalCatalog,
+  characterId: number,
+  values: Record<string, string> = {},
+  categories: Record<string, string> = {},
+) {
   const knownTagIds = new Set(catalog.tags.map((tag) => tag.id));
   const valueMap = new Map(catalog.values.map((item) => [`${item.characterId}:${item.tagId}`, item]));
   for (const [tagIdText, value] of Object.entries(values)) {
     const tagId = Number(tagIdText);
     if (!Number.isInteger(tagId) || !knownTagIds.has(tagId)) continue;
-    valueMap.set(`${characterId}:${tagId}`, { characterId, tagId, value: value.trim() });
+    const category = categories[tagIdText]?.trim() ?? "";
+    valueMap.set(`${characterId}:${tagId}`, {
+      characterId,
+      tagId,
+      value: value.trim(),
+      ...(category ? { category } : {}),
+    });
   }
   catalog.values = [...valueMap.values()];
 }
@@ -248,10 +266,10 @@ export function applyCatalogMutation(catalog: LocalCatalog, mutation: CatalogMut
     const name = mutation.name?.trim() ?? "";
     if (!name) throw new Error("标签名不能为空。");
     assertUniqueName(next.tags, name, mutation.id);
-    const tag = {
+    const tag: LocalTag = {
       id: mutation.id ?? nextId(next.tags),
       name,
-      kind: mutation.kind === "ordered" ? "ordered" as const : "exact" as const,
+      kind: mutation.kind === "ordered" || mutation.kind === "category" ? mutation.kind : "exact",
       unit: mutation.unit?.trim() ?? "",
       active: mutation.active !== false,
     };
@@ -281,7 +299,7 @@ export function applyCatalogMutation(catalog: LocalCatalog, mutation: CatalogMut
     const index = next.characters.findIndex((item) => item.id === character.id);
     if (index >= 0) next.characters[index] = character;
     else next.characters.push(character);
-    updateCharacterValues(next, character.id, mutation.values);
+    updateCharacterValues(next, character.id, mutation.values, mutation.categories);
     return sortCatalog(next);
   }
 

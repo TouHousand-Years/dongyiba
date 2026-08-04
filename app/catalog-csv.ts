@@ -10,6 +10,17 @@ export type CatalogCsvPreview = {
 
 export type CatalogCsvImportMode = "append" | "replace";
 
+export const CATEGORY_VALUE_SEPARATOR = " > ";
+
+function parseTagValue(rawValue: string, tag: LocalTag): Pick<LocalValue, "value" | "category"> {
+  if (tag.kind !== "category") return { value: rawValue };
+  const separatorIndex = rawValue.indexOf(CATEGORY_VALUE_SEPARATOR);
+  if (separatorIndex < 0) return { value: rawValue };
+  const category = rawValue.slice(0, separatorIndex).trim();
+  const value = rawValue.slice(separatorIndex + CATEGORY_VALUE_SEPARATOR.length).trim();
+  return { value, ...(category ? { category } : {}) };
+}
+
 function parseCsvRows(source: string): string[][] {
   const text = source.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
@@ -103,7 +114,11 @@ function createCharactersAndValues(rows: string[][], tags: LocalTag[], firstId: 
       active: parseActive(row[2]),
     });
     tags.forEach((tag, tagIndex) => {
-      values.push({ characterId, tagId: tag.id, value: row[CSV_BASE_HEADERS.length + tagIndex] ?? "" });
+      values.push({
+        characterId,
+        tagId: tag.id,
+        ...parseTagValue(row[CSV_BASE_HEADERS.length + tagIndex] ?? "", tag),
+      });
     });
   });
   return { characters, values };
@@ -148,12 +163,18 @@ function csvCell(value: string): string {
 export function exportCatalogCsv(catalog: LocalCatalog): string {
   const tags = sortTagsByName(catalog.tags);
   const headers = [...CSV_BASE_HEADERS, ...tags.map((tag) => tag.name)];
-  const valueMap = new Map(catalog.values.map((item) => [`${item.characterId}:${item.tagId}`, item.value]));
+  const valueMap = new Map(catalog.values.map((item) => [`${item.characterId}:${item.tagId}`, item]));
   const rows = catalog.characters.map((character) => [
     character.name,
     character.aliases.join("、"),
     character.active ? "是" : "否",
-    ...tags.map((tag) => valueMap.get(`${character.id}:${tag.id}`) ?? ""),
+    ...tags.map((tag) => {
+      const item = valueMap.get(`${character.id}:${tag.id}`);
+      if (!item) return "";
+      return tag.kind === "category" && item.category
+        ? `${item.category}${CATEGORY_VALUE_SEPARATOR}${item.value}`
+        : item.value;
+    }),
   ]);
   return `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
 }

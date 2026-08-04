@@ -33,3 +33,12 @@ test("相差较大的有序标签判为不符", () => {
   assert.equal(result[1].state, "miss");
   assert.equal(result[1].direction, "higher");
 });
+
+test("按类匹配区分完全相同、同大类和不同大类", () => {
+  const categoryTag: TagDefinition[] = [{ id: 3, name: "能力类型", kind: "category", unit: "" }];
+  const answer = [{ tagId: 3, category: "自然操纵", value: "风" }];
+
+  assert.equal(compareGuess(categoryTag, [{ tagId: 3, category: "自然操纵", value: "风" }], answer)[0].state, "match");
+  assert.equal(compareGuess(categoryTag, [{ tagId: 3, category: "自然操纵", value: "水" }], answer)[0].state, "close");
+  assert.equal(compareGuess(categoryTag, [{ tagId: 3, category: "精神干涉", value: "读心" }], answer)[0].state, "miss");
+});

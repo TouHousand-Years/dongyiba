@@ -191,7 +191,7 @@ function findCharacter(catalog: LocalCatalog, name: string): LocalCharacter | nu
 function valuesFor(catalog: LocalCatalog, characterId: number): CharacterValue[] {
   return catalog.values
     .filter((item) => item.characterId === characterId)
-    .map((item) => ({ tagId: item.tagId, value: item.value }));
+    .map((item) => ({ tagId: item.tagId, value: item.value, category: item.category }));
 }
 
 export function getLocalAnswerName(catalog: LocalCatalog, game: LocalGame): string {
