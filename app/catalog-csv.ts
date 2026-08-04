@@ -33,7 +33,7 @@ function parseTagHeader(header: string): Pick<LocalTag, "name" | "kind"> {
 
 function parseTagValue(rawValue: string, tag: LocalTag): Pick<LocalValue, "value" | "category" | "entries"> {
   if (tag.kind === "exact-multi" || tag.kind === "category-multi") {
-    const entries = parseMultiValueText(rawValue);
+    const entries = parseMultiValueText(rawValue, tag.kind === "category-multi");
     const first = entries[0];
     return {
       value: first?.value ?? "",

@@ -215,3 +215,42 @@ test("完全匹配（多标签）可保存多个标签值并通过 CSV 往返", 
     ],
   );
 });
+
+test("按类匹配（多标签）允许只填写大类并通过 CSV 导入", () => {
+  const catalog = applyCatalogMutation(createDefaultCatalog(), {
+    action: "saveTag",
+    name: "分类多标签",
+    kind: "category-multi",
+  });
+  const tag = catalog.tags.find((item) => item.name === "分类多标签")!;
+  const filled = applyCatalogMutation(catalog, {
+    action: "saveCharacter",
+    name: "单大类角色",
+    multiValues: { [String(tag.id)]: "妖怪 > 兽类\n神明" },
+  });
+  const character = filled.characters.find((item) => item.name === "单大类角色")!;
+  const storedValue = filled.values.find((item) => item.characterId === character.id && item.tagId === tag.id)!;
+  assert.deepEqual(storedValue.entries, [
+    { category: "妖怪", value: "兽类" },
+    { category: "神明", value: "" },
+  ]);
+
+  const imported = importCatalogCsv(
+    catalog,
+    parseCatalogCsv("角色名,别名,启用,分类多标签（类型：category-multi）\n导入角色,,是,妖怪\n"),
+    "replace",
+  );
+  const importedTag = imported.tags.find((item) => item.name === "分类多标签")!;
+  const importedCharacter = imported.characters.find((item) => item.name === "导入角色")!;
+  assert.deepEqual(
+    imported.values.find((item) => item.characterId === importedCharacter.id && item.tagId === importedTag.id),
+    {
+      characterId: importedCharacter.id,
+      tagId: importedTag.id,
+      value: "",
+      category: "妖怪",
+      entries: [{ category: "妖怪", value: "" }],
+    },
+  );
+  assert.match(exportCatalogCsv(imported), /导入角色,,是,妖怪/);
+});

@@ -294,7 +294,7 @@ export function AdminPanel() {
                       })}
                       placeholder={tag.kind === "exact-multi"
                         ? "每行一个标签值"
-                        : "每行一个：大类 > 小类"}
+                        : "每行一个：大类 > 小类\n也可只填写大类（小类视为空）"}
                     />
                   ) : <>
                   {tag.kind === "category" && (

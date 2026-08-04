@@ -99,3 +99,20 @@ test("按类匹配（多标签）的大类和小类可分别从不同组合命�
   assert.deepEqual(result.matchedCategories, ["自然"]);
   assert.deepEqual(result.matchedValues, ["读心"]);
 });
+
+test("按类匹配（多标签）单独填写大类时小类视为空", () => {
+  const tag: TagDefinition[] = [{ id: 7, name: "分类属性", kind: "category-multi", unit: "" }];
+  const result = compareGuess(
+    tag,
+    [{ tagId: 7, value: "", entries: [{ category: "自然", value: "" }] }],
+    [{ tagId: 7, value: "火", entries: [{ category: "自然", value: "火" }] }],
+  )[0];
+
+  assert.deepEqual(result, {
+    tagId: 7,
+    value: "无小类匹配",
+    matchedCategories: ["自然"],
+    matchedValues: [],
+    state: "close",
+  });
+});

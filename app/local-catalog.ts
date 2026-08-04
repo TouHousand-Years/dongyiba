@@ -164,14 +164,14 @@ function isTagKind(value: unknown): value is TagKind {
   return ["exact", "ordered", "category", "exact-multi", "category-multi"].includes(String(value));
 }
 
-export function parseMultiValueText(source: string): TagValueEntry[] {
+export function parseMultiValueText(source: string, singleValueAsCategory = false): TagValueEntry[] {
   return source
     .split(/\r?\n|\s*\|\s*/)
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part) => {
       const separatorIndex = part.indexOf(">");
-      if (separatorIndex < 0) return { value: part };
+      if (separatorIndex < 0) return singleValueAsCategory ? { category: part, value: "" } : { value: part };
       const category = part.slice(0, separatorIndex).trim();
       const value = part.slice(separatorIndex + 1).trim();
       return { value, ...(category ? { category } : {}) };
@@ -180,7 +180,11 @@ export function parseMultiValueText(source: string): TagValueEntry[] {
 }
 
 export function formatMultiValueText(entries: TagValueEntry[] | undefined, separator = "\n") {
-  return (entries ?? []).map((entry) => entry.category ? `${entry.category} > ${entry.value}` : entry.value).join(separator);
+  return (entries ?? []).map((entry) => {
+    const category = entry.category?.trim() ?? "";
+    const value = entry.value.trim();
+    return category && value ? `${category} > ${value}` : category || value;
+  }).join(separator);
 }
 
 function parseCatalog(value: string): LocalCatalog | null {
@@ -316,7 +320,7 @@ function updateCharacterValues(
     const tag = tagsById.get(tagId);
     if (!Number.isInteger(tagId) || !tag) continue;
     if (tag.kind === "exact-multi" || tag.kind === "category-multi") {
-      const entries = parseMultiValueText(multiValues[tagIdText] ?? value);
+      const entries = parseMultiValueText(multiValues[tagIdText] ?? value, tag.kind === "category-multi");
       const first = entries[0];
       valueMap.set(`${characterId}:${tagId}`, {
         characterId,
