@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import Link from "next/link";
 import {
   applyCatalogMutation,
+  formatMultiValueText,
   loadLocalCatalog,
   resetLocalCatalog,
   saveLocalCatalog,
@@ -12,6 +13,7 @@ import {
   type LocalCharacter,
   type LocalTag,
 } from "../local-catalog";
+import type { TagKind } from "../game-core";
 import {
   exportCatalogCsv,
   hasSameCsvHeaders,
@@ -23,7 +25,7 @@ import {
 type TagDraft = {
   id?: number;
   name: string;
-  kind: "exact" | "ordered" | "category";
+  kind: TagKind;
   unit: string;
   active: boolean;
 };
@@ -35,10 +37,23 @@ type CharacterDraft = {
   active: boolean;
   values: Record<string, string>;
   categories: Record<string, string>;
+  multiValues: Record<string, string>;
 };
 
 const emptyTag: TagDraft = { name: "", kind: "exact", unit: "", active: true };
-const emptyCharacter: CharacterDraft = { name: "", aliases: "", active: true, values: {}, categories: {} };
+const emptyCharacter: CharacterDraft = { name: "", aliases: "", active: true, values: {}, categories: {}, multiValues: {} };
+
+const tagKindLabels: Record<TagKind, string> = {
+  exact: "精确匹配",
+  ordered: "有序数值",
+  category: "按类匹配",
+  "exact-multi": "完全匹配（多标签）",
+  "category-multi": "按类匹配（多标签）",
+};
+
+function isMultiTag(kind: TagKind) {
+  return kind === "exact-multi" || kind === "category-multi";
+}
 
 export function AdminPanel() {
   const [catalog, setCatalog] = useState<LocalCatalog>({ tags: [], characters: [], values: [] });
@@ -93,6 +108,17 @@ export function AdminPanel() {
         .filter((item) => item.category)
         .map((item) => [String(item.tagId), item.category ?? ""]),
     );
+    const multiValues = Object.fromEntries(
+      characterValues
+        .filter((item) => {
+          const kind = catalog.tags.find((tag) => tag.id === item.tagId)?.kind;
+          return kind === "exact-multi" || kind === "category-multi";
+        })
+        .map((item) => [
+          String(item.tagId),
+          formatMultiValueText(item.entries ?? [{ value: item.value, ...(item.category ? { category: item.category } : {}) }]),
+        ]),
+    );
     setCharacterDraft({
       id: character.id,
       name: character.name,
@@ -100,6 +126,7 @@ export function AdminPanel() {
       active: character.active,
       values,
       categories,
+      multiValues,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -111,7 +138,7 @@ export function AdminPanel() {
       ...characterDraft,
       aliases: characterDraft.aliases.split(/[、,，]/),
     }, characterDraft.id ? "角色资料已更新。" : "新角色已加入题库。");
-    if (saved) setCharacterDraft({ ...emptyCharacter, values: {}, categories: {} });
+    if (saved) setCharacterDraft({ ...emptyCharacter, values: {}, categories: {}, multiValues: {} });
   }
 
   function restoreDefaults() {
@@ -119,7 +146,7 @@ export function AdminPanel() {
     const next = resetLocalCatalog();
     setCatalog(next);
     setTagDraft({ ...emptyTag });
-    setCharacterDraft({ ...emptyCharacter, values: {}, categories: {} });
+    setCharacterDraft({ ...emptyCharacter, values: {}, categories: {}, multiValues: {} });
     setNotice("默认题库已恢复。");
   }
 
@@ -225,6 +252,8 @@ export function AdminPanel() {
                 <option value="exact">文本完全一致</option>
                 <option value="ordered">有序数值（支持接近与箭头）</option>
                 <option value="category">按类匹配（同大类标黄）</option>
+                <option value="exact-multi">完全匹配（多标签）</option>
+                <option value="category-multi">按类匹配（多标签）</option>
               </select>
             </label>
             <label>单位<input value={tagDraft.unit} onChange={(event) => setTagDraft({ ...tagDraft, unit: event.target.value })} placeholder="可选，例如：年" /></label>
@@ -234,7 +263,7 @@ export function AdminPanel() {
           <div className="tag-list">
             {catalog.tags.map((tag: LocalTag) => (
               <div className="tag-row" key={tag.id}>
-                <div><b>{tag.name}</b><small>{{ exact: "精确匹配", ordered: "有序数值", category: "按类匹配" }[tag.kind]}{!tag.active && " · 已隐藏"}</small></div>
+                <div><b>{tag.name}</b><small>{tagKindLabels[tag.kind]}{!tag.active && " · 已隐藏"}</small></div>
                 <div>
                   <button onClick={() => setTagDraft({ id: tag.id, name: tag.name, kind: tag.kind, unit: tag.unit, active: tag.active })}>编辑</button>
                   <button className="danger" onClick={() => window.confirm(`删除标签“${tag.name}”？`) && mutate({ action: "deleteTag", id: tag.id }, "标签已删除。")}>删除</button>
@@ -247,7 +276,7 @@ export function AdminPanel() {
         <section className="admin-card">
           <div className="section-title">
             <div><span>02</span><h2>{characterDraft.id ? "编辑角色" : "添加角色"}</h2></div>
-            {characterDraft.id && <button onClick={() => setCharacterDraft({ ...emptyCharacter, values: {}, categories: {} })}>退出编辑</button>}
+            {characterDraft.id && <button onClick={() => setCharacterDraft({ ...emptyCharacter, values: {}, categories: {}, multiValues: {} })}>退出编辑</button>}
           </div>
           <form className="admin-form" onSubmit={saveCharacter}>
             <label>角色名<input value={characterDraft.name} onChange={(event) => setCharacterDraft({ ...characterDraft, name: event.target.value })} placeholder="完整角色名" required /></label>
@@ -255,6 +284,17 @@ export function AdminPanel() {
             <div className="value-grid">
               {catalog.tags.map((tag) => (
                 <label key={tag.id}>{tag.name}
+                  {isMultiTag(tag.kind) ? (
+                    <textarea
+                      rows={3}
+                      value={characterDraft.multiValues[String(tag.id)] ?? ""}
+                      onChange={(event) => setCharacterDraft({
+                        ...characterDraft,
+                        multiValues: { ...characterDraft.multiValues, [String(tag.id)]: event.target.value },
+                      })}
+                      placeholder={"每行一个：大类 > 小类\n也可只填写一个标签值"}
+                    />
+                  ) : <>
                   {tag.kind === "category" && (
                     <input
                       type="text"
@@ -275,6 +315,7 @@ export function AdminPanel() {
                     })}
                     placeholder={tag.kind === "category" ? "小类" : tag.unit ? `数值（${tag.unit}）` : "标签值"}
                   />
+                  </>}
                 </label>
               ))}
             </div>

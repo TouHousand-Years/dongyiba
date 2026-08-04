@@ -167,8 +167,32 @@ export function GameBoard() {
                       const cell = guess.feedback.find((item) => item.tagId === tag.id);
                       return (
                         <td key={tag.id} className={`result-${cell?.state ?? "miss"}`}>
-                          {cell?.category && <small>{cell.category}</small>}
-                          <span>{cell?.value ?? "未知"}</span>
+                          {cell?.matchedCategories ? (
+                            cell.matchedCategories.length || cell.matchedValues?.length ? (
+                              <div className="feedback-values">
+                                {cell.matchedCategories.map((matchedCategory) => (
+                                  <span key={`category-${matchedCategory}`}><small>大类</small>{matchedCategory}</span>
+                                ))}
+                                {cell.matchedValues?.map((matchedValue) => (
+                                  <span key={`value-${matchedValue}`}><small>小类</small>{matchedValue}</span>
+                                ))}
+                              </div>
+                            ) : <span>无匹配</span>
+                          ) : cell?.matches ? (
+                            cell.matches.length ? (
+                              <div className="feedback-values">
+                                {cell.matches.map((entry, index) => (
+                                  <span key={`${entry.category ?? ""}-${entry.value}-${index}`}>
+                                    {entry.category && <small>{entry.category}</small>}
+                                    {entry.value}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : <span>无匹配</span>
+                          ) : <>
+                            {cell?.category && <small>{cell.category}</small>}
+                            <span>{cell?.value ?? "未知"}</span>
+                          </>}
                           {cell?.direction && <i>{cell.direction === "higher" ? "↑" : "↓"}</i>}
                         </td>
                       );
@@ -204,6 +228,7 @@ export function GameBoard() {
             <p>输入任意候选角色。每次猜测后，标签会告诉你与答案的距离。</p>
             <div className="help-row"><i className="match" /><span><b>命中</b>：这个标签完全一致。</span></div>
             <div className="help-row"><i className="close" /><span><b>接近</b>：数值标签相差不超过 5，或分类标签同大类但不同小类。</span></div>
+            <div className="help-row"><i className="match" /><span><b>多标签</b>：完全匹配模式要求完整组合重合；按类模式只需大类、小类各有重合项。</span></div>
             <div className="help-row"><i className="miss" /><span><b>不符</b>：继续缩小范围。箭头提示答案更高或更低。</span></div>
           </section>
         </div>

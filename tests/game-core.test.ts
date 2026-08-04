@@ -42,3 +42,60 @@ test("按类匹配区分完全相同、同大类和不同大类", () => {
   assert.equal(compareGuess(categoryTag, [{ tagId: 3, category: "自然操纵", value: "水" }], answer)[0].state, "close");
   assert.equal(compareGuess(categoryTag, [{ tagId: 3, category: "精神干涉", value: "读心" }], answer)[0].state, "miss");
 });
+
+test("完全匹配（多标签）命中任意完整组合并只返回命中项", () => {
+  const tag: TagDefinition[] = [{ id: 4, name: "复合属性", kind: "exact-multi", unit: "" }];
+  const result = compareGuess(
+    tag,
+    [{ tagId: 4, value: "风", entries: [
+      { category: "自然", value: "风" },
+      { category: "自然", value: "水" },
+      { category: "精神", value: "读心" },
+    ] }],
+    [{ tagId: 4, value: "水", entries: [
+      { category: "自然", value: "水" },
+      { category: "精神", value: "读心" },
+      { category: "神术", value: "祈雨" },
+    ] }],
+  )[0];
+
+  assert.equal(result.state, "match");
+  assert.deepEqual(result.matches, [
+    { category: "自然", value: "水" },
+    { category: "精神", value: "读心" },
+  ]);
+});
+
+test("按类匹配（多标签）仅有大类重合时标黄，否则标灰", () => {
+  const tag: TagDefinition[] = [{ id: 5, name: "复合能力", kind: "category-multi", unit: "" }];
+  const answer = [{ tagId: 5, value: "火", entries: [{ category: "自然", value: "火" }] }];
+  const close = compareGuess(tag, [{ tagId: 5, value: "风", entries: [
+    { category: "自然", value: "风" },
+    { category: "精神", value: "读心" },
+  ] }], answer)[0];
+  const miss = compareGuess(tag, [{ tagId: 5, value: "祈雨", entries: [{ category: "神术", value: "祈雨" }] }], answer)[0];
+
+  assert.equal(close.state, "close");
+  assert.deepEqual(close.matchedCategories, ["自然"]);
+  assert.deepEqual(close.matchedValues, []);
+  assert.deepEqual(miss, { tagId: 5, value: "无匹配", matchedCategories: [], matchedValues: [], state: "miss" });
+});
+
+test("按类匹配（多标签）的大类和小类可分别从不同组合命中", () => {
+  const tag: TagDefinition[] = [{ id: 6, name: "多重属性", kind: "category-multi", unit: "" }];
+  const result = compareGuess(
+    tag,
+    [{ tagId: 6, value: "风", entries: [
+      { category: "自然", value: "风" },
+      { category: "精神", value: "读心" },
+    ] }],
+    [{ tagId: 6, value: "读心", entries: [
+      { category: "自然", value: "火" },
+      { category: "神术", value: "读心" },
+    ] }],
+  )[0];
+
+  assert.equal(result.state, "match");
+  assert.deepEqual(result.matchedCategories, ["自然"]);
+  assert.deepEqual(result.matchedValues, ["读心"]);
+});

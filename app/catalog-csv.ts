@@ -1,4 +1,4 @@
-import { sortTagsByName, type LocalCatalog, type LocalCharacter, type LocalTag, type LocalValue } from "./local-catalog";
+import { formatMultiValueText, parseMultiValueText, sortTagsByName, type LocalCatalog, type LocalCharacter, type LocalTag, type LocalValue } from "./local-catalog";
 
 export const CSV_BASE_HEADERS = ["角色名", "别名", "启用"] as const;
 
@@ -12,7 +12,16 @@ export type CatalogCsvImportMode = "append" | "replace";
 
 export const CATEGORY_VALUE_SEPARATOR = " > ";
 
-function parseTagValue(rawValue: string, tag: LocalTag): Pick<LocalValue, "value" | "category"> {
+function parseTagValue(rawValue: string, tag: LocalTag): Pick<LocalValue, "value" | "category" | "entries"> {
+  if (tag.kind === "exact-multi" || tag.kind === "category-multi") {
+    const entries = parseMultiValueText(rawValue);
+    const first = entries[0];
+    return {
+      value: first?.value ?? "",
+      ...(first?.category ? { category: first.category } : {}),
+      entries,
+    };
+  }
   if (tag.kind !== "category") return { value: rawValue };
   const separatorIndex = rawValue.indexOf(CATEGORY_VALUE_SEPARATOR);
   if (separatorIndex < 0) return { value: rawValue };
@@ -171,6 +180,12 @@ export function exportCatalogCsv(catalog: LocalCatalog): string {
     ...tags.map((tag) => {
       const item = valueMap.get(`${character.id}:${tag.id}`);
       if (!item) return "";
+      if (tag.kind === "exact-multi" || tag.kind === "category-multi") {
+        return formatMultiValueText(
+          item.entries ?? [{ value: item.value, ...(item.category ? { category: item.category } : {}) }],
+          " | ",
+        );
+      }
       return tag.kind === "category" && item.category
         ? `${item.category}${CATEGORY_VALUE_SEPARATOR}${item.value}`
         : item.value;

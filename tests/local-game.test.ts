@@ -39,7 +39,30 @@ test("默认题库可以在本地存储中读写", () => {
   assert.equal(loaded.characters.length, 20);
   assert.equal(loaded.tags.length, 5);
   assert.equal(loaded.values.length, 100);
+  assert.equal(loaded.tags.find((item) => item.name === "种族")?.kind, "category-multi");
+  assert.equal(loaded.tags.find((item) => item.name === "活动区域")?.kind, "exact-multi");
   assert.deepEqual(loaded.characters.find((item) => item.name === "琪露诺")?.aliases, ["⑨"]);
+});
+
+test("旧题库载入时自动迁移种族和活动区域的匹配方式", () => {
+  const storage = new MemoryStorage();
+  const legacy = createDefaultCatalog();
+  legacy.tags = legacy.tags.map((tag) => (
+    tag.name === "种族" || tag.name === "活动区域" ? { ...tag, kind: "exact" as const } : tag
+  ));
+  legacy.values = legacy.values.map((item) => ({
+    characterId: item.characterId,
+    tagId: item.tagId,
+    value: item.value,
+  }));
+  saveLocalCatalog(legacy, storage);
+
+  const migrated = loadLocalCatalog(storage);
+  const race = migrated.tags.find((tag) => tag.name === "种族")!;
+  const area = migrated.tags.find((tag) => tag.name === "活动区域")!;
+  assert.equal(race.kind, "category-multi");
+  assert.equal(area.kind, "exact-multi");
+  assert.equal(migrated.values.find((item) => item.tagId === race.id)?.category, "未分类");
 });
 
 test("本地后台操作会更新题库并级联清理标签值", () => {
@@ -136,5 +159,38 @@ test("按类匹配标签可保存大类和小类并通过 CSV 往返", () => {
   assert.deepEqual(
     imported.values.find((item) => item.characterId === importedCharacter.id && item.tagId === importedTag.id),
     { characterId: importedCharacter.id, tagId: importedTag.id, value: "风", category: "自然操纵" },
+  );
+});
+
+test("多标签模式可结构化保存多组大类与小类并通过 CSV 往返", () => {
+  const catalog = applyCatalogMutation(createDefaultCatalog(), {
+    action: "saveTag",
+    name: "复合属性",
+    kind: "exact-multi",
+  });
+  const tag = catalog.tags.find((item) => item.name === "复合属性")!;
+  const withCharacter = applyCatalogMutation(catalog, {
+    action: "saveCharacter",
+    name: "多标签测试角色",
+    multiValues: { [String(tag.id)]: "自然 > 风\n精神 > 读心" },
+  });
+  const character = withCharacter.characters.find((item) => item.name === "多标签测试角色")!;
+  const storedValue = withCharacter.values.find((item) => item.characterId === character.id && item.tagId === tag.id)!;
+  assert.deepEqual(storedValue.entries, [
+    { category: "自然", value: "风" },
+    { category: "精神", value: "读心" },
+  ]);
+
+  const exported = exportCatalogCsv(withCharacter);
+  assert.match(exported, /自然 > 风 \| 精神 > 读心/);
+  const imported = importCatalogCsv(withCharacter, parseCatalogCsv(exported), "replace");
+  const importedTag = imported.tags.find((item) => item.name === "复合属性")!;
+  const importedCharacter = imported.characters.find((item) => item.name === "多标签测试角色")!;
+  assert.deepEqual(
+    imported.values.find((item) => item.characterId === importedCharacter.id && item.tagId === importedTag.id)?.entries,
+    [
+      { category: "自然", value: "风" },
+      { category: "精神", value: "读心" },
+    ],
   );
 });

@@ -1,9 +1,15 @@
 export type MatchState = "match" | "close" | "miss";
+export type TagKind = "exact" | "ordered" | "category" | "exact-multi" | "category-multi";
+
+export type TagValueEntry = {
+  value: string;
+  category?: string;
+};
 
 export type TagDefinition = {
   id: number;
   name: string;
-  kind: "exact" | "ordered" | "category";
+  kind: TagKind;
   unit: string;
 };
 
@@ -11,18 +17,45 @@ export type CharacterValue = {
   tagId: number;
   value: string;
   category?: string;
+  entries?: TagValueEntry[];
 };
 
 export type GuessFeedback = {
   tagId: number;
   value: string;
   category?: string;
+  matches?: TagValueEntry[];
+  matchedCategories?: string[];
+  matchedValues?: string[];
   state: MatchState;
   direction?: "higher" | "lower";
 };
 
 export function normalizeName(value: string) {
   return value.trim().toLocaleLowerCase("zh-CN").replace(/[\s·・_-]/g, "");
+}
+
+function entriesFor(item: CharacterValue | undefined): TagValueEntry[] {
+  if (item?.entries) {
+    return item.entries
+      .map((entry) => ({ value: entry.value.trim(), ...(entry.category?.trim() ? { category: entry.category.trim() } : {}) }))
+      .filter((entry) => entry.value || entry.category);
+  }
+  if (!item) return [];
+  return [{ value: item.value, ...(item.category ? { category: item.category } : {}) }];
+}
+
+function sameEntry(left: TagValueEntry, right: TagValueEntry) {
+  return normalizeName(left.value) === normalizeName(right.value) &&
+    normalizeName(left.category ?? "") === normalizeName(right.category ?? "");
+}
+
+function uniqueEntries(entries: TagValueEntry[]) {
+  return entries.filter((entry, index) => entries.findIndex((candidate) => sameEntry(candidate, entry)) === index);
+}
+
+function uniqueNames(values: string[]) {
+  return values.filter((value, index) => values.findIndex((candidate) => normalizeName(candidate) === normalizeName(value)) === index);
 }
 
 export function compareGuess(
@@ -40,6 +73,45 @@ export function compareGuess(
     const target = answerValue?.value ?? "";
     const category = guessedValue?.category?.trim() ?? "";
     const targetCategory = answerValue?.category?.trim() ?? "";
+
+    if (tag.kind === "category-multi") {
+      const guessedEntries = entriesFor(guessedValue);
+      const answerEntries = entriesFor(answerValue);
+      const matchedCategories = uniqueNames(
+        guessedEntries
+          .map((entry) => entry.category?.trim() ?? "")
+          .filter((guessedCategory) => guessedCategory && answerEntries.some((entry) => normalizeName(entry.category ?? "") === normalizeName(guessedCategory))),
+      );
+      const matchedValues = uniqueNames(
+        guessedEntries
+          .map((entry) => entry.value.trim())
+          .filter((guessedSmallValue) => guessedSmallValue && answerEntries.some((entry) => normalizeName(entry.value) === normalizeName(guessedSmallValue))),
+      );
+
+      if (matchedCategories.length && matchedValues.length) {
+        return {
+          tagId: tag.id,
+          value: matchedValues.join("、"),
+          matchedCategories,
+          matchedValues,
+          state: "match",
+        };
+      }
+      if (matchedCategories.length) {
+        return { tagId: tag.id, value: "无小类匹配", matchedCategories, matchedValues: [], state: "close" };
+      }
+      return { tagId: tag.id, value: "无匹配", matchedCategories: [], matchedValues: [], state: "miss" };
+    }
+
+    if (tag.kind === "exact-multi") {
+      const guessedEntries = entriesFor(guessedValue);
+      const answerEntries = entriesFor(answerValue);
+      const exactMatches = uniqueEntries(guessedEntries.filter((entry) => answerEntries.some((targetEntry) => sameEntry(entry, targetEntry))));
+      if (exactMatches.length) {
+        return { tagId: tag.id, value: exactMatches.map((entry) => entry.value).join("、"), matches: exactMatches, state: "match" };
+      }
+      return { tagId: tag.id, value: "无匹配", matches: [], state: "miss" };
+    }
 
     if (
       normalizeName(value) === normalizeName(target) &&

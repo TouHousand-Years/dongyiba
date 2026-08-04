@@ -1,9 +1,9 @@
-import type { TagDefinition } from "./game-core";
+import type { TagDefinition, TagKind, TagValueEntry } from "./game-core";
 
 export type LocalTag = {
   id: number;
   name: string;
-  kind: "exact" | "ordered" | "category";
+  kind: TagKind;
   unit: string;
   active: boolean;
 };
@@ -20,6 +20,7 @@ export type LocalValue = {
   tagId: number;
   value: string;
   category?: string;
+  entries?: TagValueEntry[];
 };
 
 export type LocalCatalog = {
@@ -35,7 +36,7 @@ export type CatalogMutation =
       action: "saveTag";
       id?: number;
       name?: string;
-      kind?: "exact" | "ordered" | "category";
+      kind?: TagKind;
       unit?: string;
       active?: boolean;
     }
@@ -48,18 +49,45 @@ export type CatalogMutation =
       active?: boolean;
       values?: Record<string, string>;
       categories?: Record<string, string>;
+      multiValues?: Record<string, string>;
     }
   | { action: "deleteCharacter"; id: number };
 
 const CATALOG_STORAGE_KEY = "dongyiba:catalog:v1";
 
 const seedTags = [
-  [1, "种族", "exact", ""],
-  [2, "活动区域", "exact", ""],
+  [1, "种族", "category-multi", ""],
+  [2, "活动区域", "exact-multi", ""],
   [3, "发色", "exact", ""],
   [4, "初登场年份", "ordered", "年"],
   [5, "身份", "exact", ""],
 ] as const;
+
+const REQUIRED_TAG_KINDS: Readonly<Record<string, TagKind>> = {
+  "种族": "category-multi",
+  "活动区域": "exact-multi",
+};
+const LEGACY_RACE_CATEGORY = "未分类";
+
+function migrateRequiredTagKinds(tags: LocalTag[]): LocalTag[] {
+  return tags.map((tag) => ({ ...tag, kind: REQUIRED_TAG_KINDS[tag.name] ?? tag.kind }));
+}
+
+function migrateRequiredValues(tags: LocalTag[], values: LocalValue[]): LocalValue[] {
+  const raceTagIds = new Set(tags.filter((tag) => tag.name === "种族").map((tag) => tag.id));
+  return values.map((item) => {
+    if (!raceTagIds.has(item.tagId)) return item;
+    const entries = item.entries?.map((entry) => ({
+      ...entry,
+      category: entry.category?.trim() || LEGACY_RACE_CATEGORY,
+    }));
+    return {
+      ...item,
+      category: item.category?.trim() || LEGACY_RACE_CATEGORY,
+      ...(entries ? { entries } : {}),
+    };
+  });
+}
 
 const seedCharacters = [
   [1, "博丽灵梦", ["灵梦"], ["人类", "博丽神社", "黑色", "1997", "巫女"]],
@@ -105,6 +133,7 @@ export function createDefaultCatalog(): LocalCatalog {
         characterId,
         tagId: seedTags[index][0],
         value,
+        ...(seedTags[index][1] === "种族" ? { category: LEGACY_RACE_CATEGORY } : {}),
       })),
     ),
   };
@@ -123,12 +152,35 @@ function cloneCatalog(catalog: LocalCatalog): LocalCatalog {
   return {
     tags: catalog.tags.map((tag) => ({ ...tag })),
     characters: catalog.characters.map((character) => ({ ...character, aliases: [...character.aliases] })),
-    values: catalog.values.map((item) => ({ ...item })),
+    values: catalog.values.map((item) => ({ ...item, ...(item.entries ? { entries: item.entries.map((entry) => ({ ...entry })) } : {}) })),
   };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isTagKind(value: unknown): value is TagKind {
+  return ["exact", "ordered", "category", "exact-multi", "category-multi"].includes(String(value));
+}
+
+export function parseMultiValueText(source: string): TagValueEntry[] {
+  return source
+    .split(/\r?\n|\s*\|\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const separatorIndex = part.indexOf(">");
+      if (separatorIndex < 0) return { value: part };
+      const category = part.slice(0, separatorIndex).trim();
+      const value = part.slice(separatorIndex + 1).trim();
+      return { value, ...(category ? { category } : {}) };
+    })
+    .filter((entry) => entry.value || entry.category);
+}
+
+export function formatMultiValueText(entries: TagValueEntry[] | undefined, separator = "\n") {
+  return (entries ?? []).map((entry) => entry.category ? `${entry.category} > ${entry.value}` : entry.value).join(separator);
 }
 
 function parseCatalog(value: string): LocalCatalog | null {
@@ -145,7 +197,7 @@ function parseCatalog(value: string): LocalCatalog | null {
       return {
         id,
         name: item.name,
-        kind: item.kind === "ordered" || item.kind === "category" ? item.kind : "exact",
+        kind: isTagKind(item.kind) ? item.kind : "exact",
         unit: typeof item.unit === "string" ? item.unit : "",
         active: item.active !== false && item.active !== 0,
       };
@@ -164,21 +216,32 @@ function parseCatalog(value: string): LocalCatalog | null {
       const characterId = Number(item.characterId);
       const tagId = Number(item.tagId);
       if (!Number.isInteger(characterId) || !Number.isInteger(tagId)) return null;
+      const entries = Array.isArray(item.entries)
+        ? item.entries
+            .filter((entry): entry is Record<string, unknown> => isRecord(entry) && typeof entry.value === "string")
+            .map((entry) => ({
+              value: String(entry.value).trim(),
+              ...(typeof entry.category === "string" && entry.category.trim() ? { category: entry.category.trim() } : {}),
+            }))
+            .filter((entry) => entry.value || entry.category)
+        : undefined;
       return {
         characterId,
         tagId,
         value: item.value,
         ...(typeof item.category === "string" && item.category.trim() ? { category: item.category.trim() } : {}),
+        ...(entries ? { entries } : {}),
       };
     });
 
     if (tags.some((item) => item === null) || characters.some((item) => item === null) || values.some((item) => item === null)) {
       return null;
     }
+    const migratedTags = migrateRequiredTagKinds(tags as LocalTag[]);
     return sortCatalog({
-      tags: tags as LocalTag[],
+      tags: migratedTags,
       characters: characters as LocalCharacter[],
-      values: values as LocalValue[],
+      values: migrateRequiredValues(migratedTags, values as LocalValue[]),
     });
   } catch {
     return null;
@@ -242,12 +305,28 @@ function updateCharacterValues(
   characterId: number,
   values: Record<string, string> = {},
   categories: Record<string, string> = {},
+  multiValues: Record<string, string> = {},
 ) {
-  const knownTagIds = new Set(catalog.tags.map((tag) => tag.id));
+  const tagsById = new Map(catalog.tags.map((tag) => [tag.id, tag]));
   const valueMap = new Map(catalog.values.map((item) => [`${item.characterId}:${item.tagId}`, item]));
-  for (const [tagIdText, value] of Object.entries(values)) {
+  const tagIds = new Set([...Object.keys(values), ...Object.keys(multiValues)]);
+  for (const tagIdText of tagIds) {
+    const value = values[tagIdText] ?? "";
     const tagId = Number(tagIdText);
-    if (!Number.isInteger(tagId) || !knownTagIds.has(tagId)) continue;
+    const tag = tagsById.get(tagId);
+    if (!Number.isInteger(tagId) || !tag) continue;
+    if (tag.kind === "exact-multi" || tag.kind === "category-multi") {
+      const entries = parseMultiValueText(multiValues[tagIdText] ?? value);
+      const first = entries[0];
+      valueMap.set(`${characterId}:${tagId}`, {
+        characterId,
+        tagId,
+        value: first?.value ?? "",
+        ...(first?.category ? { category: first.category } : {}),
+        entries,
+      });
+      continue;
+    }
     const category = categories[tagIdText]?.trim() ?? "";
     valueMap.set(`${characterId}:${tagId}`, {
       characterId,
@@ -269,7 +348,7 @@ export function applyCatalogMutation(catalog: LocalCatalog, mutation: CatalogMut
     const tag: LocalTag = {
       id: mutation.id ?? nextId(next.tags),
       name,
-      kind: mutation.kind === "ordered" || mutation.kind === "category" ? mutation.kind : "exact",
+      kind: isTagKind(mutation.kind) ? mutation.kind : "exact",
       unit: mutation.unit?.trim() ?? "",
       active: mutation.active !== false,
     };
@@ -299,7 +378,7 @@ export function applyCatalogMutation(catalog: LocalCatalog, mutation: CatalogMut
     const index = next.characters.findIndex((item) => item.id === character.id);
     if (index >= 0) next.characters[index] = character;
     else next.characters.push(character);
-    updateCharacterValues(next, character.id, mutation.values, mutation.categories);
+    updateCharacterValues(next, character.id, mutation.values, mutation.categories, mutation.multiValues);
     return sortCatalog(next);
   }
 
