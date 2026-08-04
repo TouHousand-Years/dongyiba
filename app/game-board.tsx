@@ -98,7 +98,7 @@ export function GameBoard() {
       <section className="hero">
         <div className="crest" aria-hidden="true">東</div>
         <p className="eyebrow">Gensokyo character puzzle</p>
-        <h1>东方一把</h1>
+        <h1>东一把</h1>
         <p className="subtitle">猜出隐藏的那位幻想乡角色</p>
       </section>
 
@@ -108,7 +108,7 @@ export function GameBoard() {
         <span><b>{attemptsLeft}</b> 次剩余</span>
       </section>
 
-      <section className="game-card" aria-label="东方一把游戏挑战">
+      <section className="game-card" aria-label="东一把游戏挑战">
         <div className="mode-switch" aria-label="选择游戏模式">
           {(["daily", "unlimited"] as const).map((item) => (
             <button

@@ -157,7 +157,7 @@ export function AdminPanel() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `东方一把题库-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `东一把题库-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     setNotice(`已导出 ${catalog.characters.length} 位角色的 CSV 文件。`);

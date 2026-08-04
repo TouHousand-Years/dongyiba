@@ -9,7 +9,7 @@ test("玩家首页使用真实游戏组件和正式元数据", async () => {
     readFile(new URL("../app/game-board.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(page, /<GameBoard \/>/);
-  assert.match(layout, /东方一把｜猜东方 Project 角色/);
+  assert.match(layout, /东一把｜猜东方 Project 角色/);
   assert.match(layout, /og\.png/);
   assert.match(game, /每日挑战/);
   assert.match(game, /无限模式/);
@@ -39,7 +39,7 @@ test("游戏页与后台共用本地题库，不请求远程服务", async () =>
 
 test("提供双击启动本地网页的快捷脚本", async () => {
   const [launcher, script] = await Promise.all([
-    readFile(new URL("../启动东方一把.cmd", import.meta.url), "utf8"),
+    readFile(new URL("../启动东一把.cmd", import.meta.url), "utf8"),
     readFile(new URL("../scripts/start-local.ps1", import.meta.url), "utf8"),
   ]);
   assert.match(launcher, /scripts\\start-local\.ps1/);
