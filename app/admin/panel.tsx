@@ -249,9 +249,9 @@ export function AdminPanel() {
             <label>标签名称<input value={tagDraft.name} onChange={(event) => setTagDraft({ ...tagDraft, name: event.target.value })} placeholder="例如：瞳色" required /></label>
             <label>判定方式
               <select value={tagDraft.kind} onChange={(event) => setTagDraft({ ...tagDraft, kind: event.target.value as TagDraft["kind"] })}>
-                <option value="exact">文本完全一致</option>
                 <option value="ordered">有序数值（支持接近与箭头）</option>
-                <option value="category">按类匹配（同大类标黄）</option>
+                <option value="exact">完全匹配</option>
+                <option value="category">按类匹配</option>
                 <option value="exact-multi">完全匹配（多标签）</option>
                 <option value="category-multi">按类匹配（多标签）</option>
               </select>
