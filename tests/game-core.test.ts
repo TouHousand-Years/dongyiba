@@ -3,8 +3,8 @@ import test from "node:test";
 import { compareGuess, normalizeName, type TagDefinition } from "../app/game-core";
 
 const tags: TagDefinition[] = [
-  { id: 1, name: "种族", kind: "exact", unit: "", sortOrder: 10 },
-  { id: 2, name: "初登场年份", kind: "ordered", unit: "年", sortOrder: 20 },
+  { id: 1, name: "种族", kind: "exact", unit: "" },
+  { id: 2, name: "初登场年份", kind: "ordered", unit: "年" },
 ];
 
 test("角色别名归一化忽略空格与分隔符", () => {

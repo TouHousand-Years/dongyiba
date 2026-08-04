@@ -29,6 +29,8 @@ test("游戏页与后台共用本地题库，不请求远程服务", async () =>
   assert.match(panel, /添加到当前题库/);
   assert.match(panel, /替换当前题库/);
   assert.match(panel, /导出当前题库/);
+  assert.match(panel, /标签按名称首字自动排序/);
+  assert.doesNotMatch(panel, /<label>排序/);
   assert.match(catalog, /dongyiba:catalog:v1/);
   assert.match(catalog, /博丽灵梦/);
   assert.match(game, /submitLocalGuess/);

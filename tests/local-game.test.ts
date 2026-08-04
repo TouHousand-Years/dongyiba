@@ -47,15 +47,15 @@ test("本地后台操作会更新题库并级联清理标签值", () => {
   const withTag = applyCatalogMutation(catalog, {
     action: "saveTag",
     name: "瞳色",
-    sortOrder: 60,
   });
-  assert.equal(withTag.tags.at(-1)?.name, "瞳色");
+  assert.deepEqual(withTag.tags.map((tag) => tag.name), ["初登场年份", "发色", "活动区域", "身份", "瞳色", "种族"]);
+  const eyeColorTag = withTag.tags.find((tag) => tag.name === "瞳色")!;
 
   const withCharacter = applyCatalogMutation(withTag, {
     action: "saveCharacter",
     name: "测试角色",
     aliases: ["测试", "测试"],
-    values: { [String(withTag.tags.at(-1)?.id)]: "紫色" },
+    values: { [String(eyeColorTag.id)]: "紫色" },
   });
   const character = withCharacter.characters.find((item) => item.name === "测试角色");
   assert.deepEqual(character?.aliases, ["测试"]);
@@ -63,10 +63,10 @@ test("本地后台操作会更新题库并级联清理标签值", () => {
 
   const withoutTag = applyCatalogMutation(withCharacter, {
     action: "deleteTag",
-    id: withTag.tags.at(-1)!.id,
+    id: eyeColorTag.id,
   });
   assert.equal(withoutTag.tags.some((tag) => tag.name === "瞳色"), false);
-  assert.equal(withoutTag.values.some((item) => item.tagId === withTag.tags.at(-1)!.id), false);
+  assert.equal(withoutTag.values.some((item) => item.tagId === eyeColorTag.id), false);
 });
 
 test("本地游戏可以用别名完成一局并返回标签反馈", () => {
@@ -92,7 +92,7 @@ test("CSV 导出后可按相同表头添加角色", () => {
   assert.equal(preview.rows.length, 20);
   assert.equal(preview.rows[0][0], "博丽灵梦");
 
-  const addition = parseCatalogCsv("角色名,别名,启用,种族,活动区域,发色,初登场年份,身份\r\n测试角色,测试、测测,是,妖怪,人间之里,紫色,2026,测试员\r\n");
+  const addition = parseCatalogCsv("角色名,别名,启用,初登场年份,发色,活动区域,身份,种族\r\n测试角色,测试、测测,是,2026,紫色,人间之里,测试员,妖怪\r\n");
   const added = importCatalogCsv(catalog, addition, "append");
   assert.equal(added.characters.length, 21);
   const character = added.characters.find((item) => item.name === "测试角色")!;
@@ -107,7 +107,7 @@ test("不同 CSV 表头禁止添加，但可替换并重建标签", () => {
   assert.throws(() => importCatalogCsv(catalog, preview, "append"), /只能选择替换/);
 
   const replaced = importCatalogCsv(catalog, preview, "replace");
-  assert.deepEqual(replaced.tags.map((tag) => tag.name), ["阵营", "称号,备注"]);
+  assert.deepEqual(replaced.tags.map((tag) => tag.name), ["称号,备注", "阵营"]);
   assert.equal(replaced.characters[0].name, "新,角色");
   assert.equal(replaced.characters[0].active, false);
   assert.deepEqual(replaced.values.map((item) => item.value), ["中立", "带,逗号"]);

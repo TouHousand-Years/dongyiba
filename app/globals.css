@@ -152,6 +152,7 @@ footer { text-align: center; color: #998d92; font-size: 11px; letter-spacing: .0
 .section-title span { color: var(--red); font: 700 11px Arial; letter-spacing: .12em; }
 .section-title h2 { font-size: 20px; margin: 0; }
 .section-title button, .section-title input { border: 1px solid #d8cbc5; border-radius: 8px; background: #fff; padding: 8px 10px; color: var(--ink); }
+.admin-hint { margin: -10px 0 16px; color: var(--muted); font-size: 12px; }
 .admin-form { display: grid; gap: 13px; }
 .admin-form.compact { grid-template-columns: 1fr 1fr; }
 .admin-form label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }

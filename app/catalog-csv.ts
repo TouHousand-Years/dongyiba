@@ -1,4 +1,4 @@
-import type { LocalCatalog, LocalCharacter, LocalTag, LocalValue } from "./local-catalog";
+import { sortTagsByName, type LocalCatalog, type LocalCharacter, type LocalTag, type LocalValue } from "./local-catalog";
 
 export const CSV_BASE_HEADERS = ["角色名", "别名", "启用"] as const;
 
@@ -52,7 +52,7 @@ function parseCsvRows(source: string): string[][] {
 }
 
 export function getCatalogCsvHeaders(catalog: LocalCatalog): string[] {
-  return [...CSV_BASE_HEADERS, ...catalog.tags.map((tag) => tag.name)];
+  return [...CSV_BASE_HEADERS, ...sortTagsByName(catalog.tags).map((tag) => tag.name)];
 }
 
 export function hasSameCsvHeaders(catalog: LocalCatalog, preview: CatalogCsvPreview): boolean {
@@ -122,9 +122,10 @@ export function importCatalogCsv(
     const duplicate = preview.rows.find((row) => existingNames.has(row[0]));
     if (duplicate) throw new Error(`角色“${duplicate[0]}”已存在；添加模式不会覆盖现有角色。`);
     const firstId = catalog.characters.reduce((highest, character) => Math.max(highest, character.id), 0) + 1;
-    const additions = createCharactersAndValues(preview.rows, catalog.tags, firstId);
+    const tags = sortTagsByName(catalog.tags);
+    const additions = createCharactersAndValues(preview.rows, tags, firstId);
     return {
-      tags: catalog.tags.map((tag) => ({ ...tag })),
+      tags,
       characters: [...catalog.characters, ...additions.characters].sort((a, b) => a.name.localeCompare(b.name, "zh-CN")),
       values: [...catalog.values, ...additions.values].sort((a, b) => a.characterId - b.characterId || a.tagId - b.tagId),
     };
@@ -133,11 +134,11 @@ export function importCatalogCsv(
   const tags = preview.tagNames.map((name, index) => {
     const existing = catalog.tags.find((tag) => tag.name === name);
     return existing
-      ? { ...existing, id: index + 1, sortOrder: (index + 1) * 10 }
-      : { id: index + 1, name, kind: "exact" as const, unit: "", sortOrder: (index + 1) * 10, active: true };
+      ? { ...existing, id: index + 1 }
+      : { id: index + 1, name, kind: "exact" as const, unit: "", active: true };
   });
   const replacement = createCharactersAndValues(preview.rows, tags, 1);
-  return { tags, ...replacement };
+  return { tags: sortTagsByName(tags), ...replacement };
 }
 
 function csvCell(value: string): string {
@@ -145,13 +146,14 @@ function csvCell(value: string): string {
 }
 
 export function exportCatalogCsv(catalog: LocalCatalog): string {
-  const headers = getCatalogCsvHeaders(catalog);
+  const tags = sortTagsByName(catalog.tags);
+  const headers = [...CSV_BASE_HEADERS, ...tags.map((tag) => tag.name)];
   const valueMap = new Map(catalog.values.map((item) => [`${item.characterId}:${item.tagId}`, item.value]));
   const rows = catalog.characters.map((character) => [
     character.name,
     character.aliases.join("、"),
     character.active ? "是" : "否",
-    ...catalog.tags.map((tag) => valueMap.get(`${character.id}:${tag.id}`) ?? ""),
+    ...tags.map((tag) => valueMap.get(`${character.id}:${tag.id}`) ?? ""),
   ]);
   return `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
 }

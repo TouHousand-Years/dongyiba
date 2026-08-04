@@ -5,7 +5,6 @@ export type LocalTag = {
   name: string;
   kind: "exact" | "ordered";
   unit: string;
-  sortOrder: number;
   active: boolean;
 };
 
@@ -37,7 +36,6 @@ export type CatalogMutation =
       name?: string;
       kind?: "exact" | "ordered";
       unit?: string;
-      sortOrder?: number;
       active?: boolean;
     }
   | { action: "deleteTag"; id: number }
@@ -54,11 +52,11 @@ export type CatalogMutation =
 const CATALOG_STORAGE_KEY = "dongyiba:catalog:v1";
 
 const seedTags = [
-  [1, "种族", "exact", "", 10],
-  [2, "活动区域", "exact", "", 20],
-  [3, "发色", "exact", "", 30],
-  [4, "初登场年份", "ordered", "年", 40],
-  [5, "身份", "exact", "", 50],
+  [1, "种族", "exact", ""],
+  [2, "活动区域", "exact", ""],
+  [3, "发色", "exact", ""],
+  [4, "初登场年份", "ordered", "年"],
+  [5, "身份", "exact", ""],
 ] as const;
 
 const seedCharacters = [
@@ -85,15 +83,15 @@ const seedCharacters = [
 ] as const;
 
 export function createDefaultCatalog(): LocalCatalog {
+  const tags = seedTags.map(([id, name, kind, unit]) => ({
+    id,
+    name,
+    kind,
+    unit,
+    active: true,
+  }));
   return {
-    tags: seedTags.map(([id, name, kind, unit, sortOrder]) => ({
-      id,
-      name,
-      kind,
-      unit,
-      sortOrder,
-      active: true,
-    })),
+    tags: sortTagsByName(tags),
     characters: seedCharacters.map(([id, name, aliases]) => ({
       id,
       name,
@@ -147,7 +145,6 @@ function parseCatalog(value: string): LocalCatalog | null {
         name: item.name,
         kind: item.kind === "ordered" ? "ordered" as const : "exact" as const,
         unit: typeof item.unit === "string" ? item.unit : "",
-        sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : 0,
         active: item.active !== false && item.active !== 0,
       };
     });
@@ -181,9 +178,15 @@ function parseCatalog(value: string): LocalCatalog | null {
   }
 }
 
+const tagNameCollator = new Intl.Collator("zh-CN-u-co-pinyin", { sensitivity: "base", numeric: true });
+
+export function sortTagsByName(tags: LocalTag[]): LocalTag[] {
+  return [...tags].sort((a, b) => tagNameCollator.compare(a.name, b.name) || a.id - b.id);
+}
+
 function sortCatalog(catalog: LocalCatalog): LocalCatalog {
   return {
-    tags: [...catalog.tags].sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id),
+    tags: sortTagsByName(catalog.tags),
     characters: [...catalog.characters].sort((a, b) => a.name.localeCompare(b.name, "zh-CN")),
     values: [...catalog.values].sort((a, b) => a.characterId - b.characterId || a.tagId - b.tagId),
   };
@@ -206,7 +209,7 @@ export function resetLocalCatalog(storage: LocalStorageLike | null = getBrowserS
 }
 
 export function getActiveTags(catalog: LocalCatalog): LocalTag[] {
-  return catalog.tags.filter((tag) => tag.active).sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  return sortTagsByName(catalog.tags.filter((tag) => tag.active));
 }
 
 export function getActiveCharacters(catalog: LocalCatalog): LocalCharacter[] {
@@ -214,7 +217,7 @@ export function getActiveCharacters(catalog: LocalCatalog): LocalCharacter[] {
 }
 
 export function toTagDefinitions(tags: LocalTag[]): TagDefinition[] {
-  return tags.map(({ id, name, kind, unit, sortOrder }) => ({ id, name, kind, unit, sortOrder }));
+  return tags.map(({ id, name, kind, unit }) => ({ id, name, kind, unit }));
 }
 
 function nextId(items: Array<{ id: number }>) {
@@ -250,7 +253,6 @@ export function applyCatalogMutation(catalog: LocalCatalog, mutation: CatalogMut
       name,
       kind: mutation.kind === "ordered" ? "ordered" as const : "exact" as const,
       unit: mutation.unit?.trim() ?? "",
-      sortOrder: Number.isFinite(Number(mutation.sortOrder)) ? Number(mutation.sortOrder) : 0,
       active: mutation.active !== false,
     };
     const index = next.tags.findIndex((item) => item.id === tag.id);

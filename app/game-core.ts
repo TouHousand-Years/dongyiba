@@ -5,7 +5,6 @@ export type TagDefinition = {
   name: string;
   kind: "exact" | "ordered";
   unit: string;
-  sortOrder: number;
 };
 
 export type CharacterValue = {

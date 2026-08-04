@@ -25,7 +25,6 @@ type TagDraft = {
   name: string;
   kind: "exact" | "ordered";
   unit: string;
-  sortOrder: number;
   active: boolean;
 };
 
@@ -37,7 +36,7 @@ type CharacterDraft = {
   values: Record<string, string>;
 };
 
-const emptyTag: TagDraft = { name: "", kind: "exact", unit: "", sortOrder: 60, active: true };
+const emptyTag: TagDraft = { name: "", kind: "exact", unit: "", active: true };
 const emptyCharacter: CharacterDraft = { name: "", aliases: "", active: true, values: {} };
 
 export function AdminPanel() {
@@ -214,6 +213,7 @@ export function AdminPanel() {
             <div><span>01</span><h2>判定标签</h2></div>
             <button onClick={() => setTagDraft({ ...emptyTag })}>＋ 新标签</button>
           </div>
+          <p className="admin-hint">标签按名称首字自动排序。</p>
           <form className="admin-form compact" onSubmit={saveTag}>
             <label>标签名称<input value={tagDraft.name} onChange={(event) => setTagDraft({ ...tagDraft, name: event.target.value })} placeholder="例如：瞳色" required /></label>
             <label>判定方式
@@ -223,16 +223,15 @@ export function AdminPanel() {
               </select>
             </label>
             <label>单位<input value={tagDraft.unit} onChange={(event) => setTagDraft({ ...tagDraft, unit: event.target.value })} placeholder="可选，例如：年" /></label>
-            <label>排序<input type="number" value={tagDraft.sortOrder} onChange={(event) => setTagDraft({ ...tagDraft, sortOrder: Number(event.target.value) })} /></label>
             <label className="check-label"><input type="checkbox" checked={tagDraft.active} onChange={(event) => setTagDraft({ ...tagDraft, active: event.target.checked })} />在游戏中显示</label>
             <button className="admin-primary" disabled={busy}>{tagDraft.id ? "保存修改" : "添加标签"}</button>
           </form>
           <div className="tag-list">
             {catalog.tags.map((tag: LocalTag) => (
               <div className="tag-row" key={tag.id}>
-                <div><b>{tag.name}</b><small>{tag.kind === "ordered" ? "有序数值" : "精确匹配"} · 排序 {tag.sortOrder}{!tag.active && " · 已隐藏"}</small></div>
+                <div><b>{tag.name}</b><small>{tag.kind === "ordered" ? "有序数值" : "精确匹配"}{!tag.active && " · 已隐藏"}</small></div>
                 <div>
-                  <button onClick={() => setTagDraft({ id: tag.id, name: tag.name, kind: tag.kind, unit: tag.unit, sortOrder: tag.sortOrder, active: tag.active })}>编辑</button>
+                  <button onClick={() => setTagDraft({ id: tag.id, name: tag.name, kind: tag.kind, unit: tag.unit, active: tag.active })}>编辑</button>
                   <button className="danger" onClick={() => window.confirm(`删除标签“${tag.name}”？`) && mutate({ action: "deleteTag", id: tag.id }, "标签已删除。")}>删除</button>
                 </div>
               </div>
