@@ -183,7 +183,7 @@ test("按类匹配标签可保存大类和小类并通过 CSV 往返", () => {
   );
 });
 
-test("多标签模式可结构化保存多组大类与小类并通过 CSV 往返", () => {
+test("完全匹配（多标签）可保存多个标签值并通过 CSV 往返", () => {
   const catalog = applyCatalogMutation(createDefaultCatalog(), {
     action: "saveTag",
     name: "复合属性",
@@ -193,25 +193,25 @@ test("多标签模式可结构化保存多组大类与小类并通过 CSV 往返
   const withCharacter = applyCatalogMutation(catalog, {
     action: "saveCharacter",
     name: "多标签测试角色",
-    multiValues: { [String(tag.id)]: "自然 > 风\n精神 > 读心" },
+    multiValues: { [String(tag.id)]: "风\n读心" },
   });
   const character = withCharacter.characters.find((item) => item.name === "多标签测试角色")!;
   const storedValue = withCharacter.values.find((item) => item.characterId === character.id && item.tagId === tag.id)!;
   assert.deepEqual(storedValue.entries, [
-    { category: "自然", value: "风" },
-    { category: "精神", value: "读心" },
+    { value: "风" },
+    { value: "读心" },
   ]);
 
   const exported = exportCatalogCsv(withCharacter);
-  assert.match(exported, /自然 > 风 \| 精神 > 读心/);
+  assert.match(exported, /风 \| 读心/);
   const imported = importCatalogCsv(withCharacter, parseCatalogCsv(exported), "replace");
   const importedTag = imported.tags.find((item) => item.name === "复合属性")!;
   const importedCharacter = imported.characters.find((item) => item.name === "多标签测试角色")!;
   assert.deepEqual(
     imported.values.find((item) => item.characterId === importedCharacter.id && item.tagId === importedTag.id)?.entries,
     [
-      { category: "自然", value: "风" },
-      { category: "精神", value: "读心" },
+      { value: "风" },
+      { value: "读心" },
     ],
   );
 });

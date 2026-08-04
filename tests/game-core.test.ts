@@ -43,26 +43,26 @@ test("按类匹配区分完全相同、同大类和不同大类", () => {
   assert.equal(compareGuess(categoryTag, [{ tagId: 3, category: "精神干涉", value: "读心" }], answer)[0].state, "miss");
 });
 
-test("完全匹配（多标签）命中任意完整组合并只返回命中项", () => {
+test("完全匹配（多标签）命中任意标签值并只返回命中项", () => {
   const tag: TagDefinition[] = [{ id: 4, name: "复合属性", kind: "exact-multi", unit: "" }];
   const result = compareGuess(
     tag,
     [{ tagId: 4, value: "风", entries: [
-      { category: "自然", value: "风" },
-      { category: "自然", value: "水" },
-      { category: "精神", value: "读心" },
+      { value: "风" },
+      { value: "水" },
+      { value: "读心" },
     ] }],
     [{ tagId: 4, value: "水", entries: [
-      { category: "自然", value: "水" },
-      { category: "精神", value: "读心" },
-      { category: "神术", value: "祈雨" },
+      { value: "水" },
+      { value: "读心" },
+      { value: "祈雨" },
     ] }],
   )[0];
 
   assert.equal(result.state, "match");
   assert.deepEqual(result.matches, [
-    { category: "自然", value: "水" },
-    { category: "精神", value: "读心" },
+    { value: "水" },
+    { value: "读心" },
   ]);
 });
 

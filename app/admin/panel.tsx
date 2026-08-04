@@ -292,7 +292,9 @@ export function AdminPanel() {
                         ...characterDraft,
                         multiValues: { ...characterDraft.multiValues, [String(tag.id)]: event.target.value },
                       })}
-                      placeholder={"每行一个：大类 > 小类\n也可只填写一个标签值"}
+                      placeholder={tag.kind === "exact-multi"
+                        ? "每行一个标签值"
+                        : "每行一个：大类 > 小类"}
                     />
                   ) : <>
                   {tag.kind === "category" && (
