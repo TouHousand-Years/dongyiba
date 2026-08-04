@@ -146,7 +146,7 @@ export function GameBoard() {
         <div className="crest" aria-hidden="true">東</div>
         <p className="eyebrow">Gensokyo character puzzle</p>
         <h1>东一把</h1>
-        <p className="subtitle">猜出隐藏的那位幻想乡角色</p>
+        <p className="subtitle">猜出隐藏的那位东方角色</p>
       </section>
 
       <section className="status-strip" aria-label="今日挑战状态">
