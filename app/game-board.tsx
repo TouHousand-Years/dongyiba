@@ -192,7 +192,7 @@ export function GameBoard() {
         </div>
       </section>
 
-      <footer>以爱与弹幕制作 · 非官方东方 Project 同人小游戏</footer>
+      <footer>芊年人间出品·东方 Project 同人小游戏</footer>
 
       {showHelp && (
         <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
