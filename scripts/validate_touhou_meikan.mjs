@@ -38,8 +38,9 @@ if (field || row.length) {
 
 const expectedHeaders = [
   "角色名", "别名", "启用",
-  "初登场作品（类型：exact）", "发色（类型：exact-multi）", "所属地点（类型：exact-multi）",
+  "初登场作品（类型：exact）", "发色（类型：exact-multi）", "所属地点（类型：category-multi）",
   "种族（类型：category-multi）", "是自机吗？（类型：category-multi）",
+  "初登场年份（类型：ordered）", "是敌人吗？（仅整数非对战作）（类型：category-multi）",
 ];
 if (JSON.stringify(rows[0]) !== JSON.stringify(expectedHeaders)) {
   throw new Error(`表头不匹配：${JSON.stringify(rows[0])}`);
@@ -50,10 +51,17 @@ const names = dataRows.map((item) => item[0]);
 if (new Set(names).size !== names.length) throw new Error("存在重复角色名。");
 const roots = new Set(["人类", "妖怪", "神明"]);
 const playRoots = new Set(["是", "不是"]);
+const ignoredLegacyEnemyCharacters = new Set([
+  "博丽灵梦",
+  "雾雨魔理沙",
+  "风见幽香",
+  "爱丽丝·玛格特洛依德",
+]);
 for (const [index, item] of dataRows.entries()) {
-  if (item.length !== expectedHeaders.length) throw new Error(`第 ${index + 2} 行列数不为 8。`);
+  if (item.length !== expectedHeaders.length) throw new Error(`第 ${index + 2} 行列数不为 ${expectedHeaders.length}。`);
   if (!item[0].trim() || !item[2].trim()) throw new Error(`第 ${index + 2} 行基础字段为空。`);
   if (!item[3].trim() || /^\d{4} > /.test(item[3])) throw new Error(`第 ${index + 2} 行作品字段格式错误：${item[3]}`);
+  if (!/^\d{4}$/.test(item[8])) throw new Error(`第 ${index + 2} 行初登场年份格式错误：${item[8]}`);
   if (!item[5].trim()) throw new Error(`第 ${index + 2} 行所属地点为空。`);
   if (item[5].includes("、") || item[5].split(" | ").slice(1).some((area) => !area.trim())) {
     throw new Error(`第 ${index + 2} 行活动区域多标签格式错误：${item[5]}`);
@@ -67,6 +75,17 @@ for (const [index, item] of dataRows.entries()) {
     if (!playRoots.has(category) || !value) throw new Error(`第 ${index + 2} 行自机分类错误：${entry}`);
     if (category === "不是" && value !== "不是") throw new Error(`第 ${index + 2} 行“不是”小类错误：${entry}`);
     if (category === "是" && !["是弹幕作", "是格斗作"].includes(value)) throw new Error(`第 ${index + 2} 行自机小类错误：${entry}`);
+  }
+  for (const entry of item[9].split(" | ")) {
+    const [category, value] = entry.split(" > ");
+    if (!["是", "不是"].includes(category) || !value) throw new Error(`第 ${index + 2} 行敌人分类错误：${entry}`);
+    if (category === "不是" && value !== "不是") throw new Error(`第 ${index + 2} 行“不是”敌人小类错误：${entry}`);
+    if (category === "是" && value !== "是EX面" && !/^是第\d+面$/.test(value)) {
+      throw new Error(`第 ${index + 2} 行“是”敌人小类错误：${entry}`);
+    }
+  }
+  if (ignoredLegacyEnemyCharacters.has(item[0]) && item[9] !== "不是 > 不是") {
+    throw new Error(`第 ${index + 2} 行不应计入旧作敌人身份：${item[0]}`);
   }
   if (item.some((cell) => /__(WORK|PLAYABLE)_/.test(cell))) throw new Error(`第 ${index + 2} 行残留占位符。`);
 }
