@@ -38,14 +38,14 @@ if (field || row.length) {
 
 const expectedHeaders = [
   "角色名", "别名", "启用",
-  "初登场作品（类型：exact）", "发色（类型：exact）", "活动区域（类型：exact-multi）",
+  "初登场作品（类型：exact）", "发色（类型：exact-multi）", "所属地点（类型：exact-multi）",
   "种族（类型：category-multi）", "是自机吗？（类型：category-multi）",
 ];
 if (JSON.stringify(rows[0]) !== JSON.stringify(expectedHeaders)) {
   throw new Error(`表头不匹配：${JSON.stringify(rows[0])}`);
 }
 const dataRows = rows.slice(1).filter((item) => item.some((cell) => cell.trim() !== ""));
-if (dataRows.length !== 114) throw new Error(`行数应为 114，实际为 ${dataRows.length}`);
+if (dataRows.length !== 133) throw new Error(`行数应为 133，实际为 ${dataRows.length}`);
 const names = dataRows.map((item) => item[0]);
 if (new Set(names).size !== names.length) throw new Error("存在重复角色名。");
 const roots = new Set(["人类", "妖怪", "神明"]);
@@ -54,8 +54,8 @@ for (const [index, item] of dataRows.entries()) {
   if (item.length !== expectedHeaders.length) throw new Error(`第 ${index + 2} 行列数不为 8。`);
   if (!item[0].trim() || !item[2].trim()) throw new Error(`第 ${index + 2} 行基础字段为空。`);
   if (!item[3].trim() || /^\d{4} > /.test(item[3])) throw new Error(`第 ${index + 2} 行作品字段格式错误：${item[3]}`);
-  if (!item[4].trim() || !item[5].trim()) throw new Error(`第 ${index + 2} 行发色或活动区域为空。`);
-  if (item[5].includes("、") || item[5].split(" | ").some((area) => !area.trim())) {
+  if (!item[5].trim()) throw new Error(`第 ${index + 2} 行所属地点为空。`);
+  if (item[5].includes("、") || item[5].split(" | ").slice(1).some((area) => !area.trim())) {
     throw new Error(`第 ${index + 2} 行活动区域多标签格式错误：${item[5]}`);
   }
   for (const entry of item[6].split(" | ")) {
