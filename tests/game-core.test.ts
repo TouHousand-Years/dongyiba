@@ -116,3 +116,22 @@ test("按类匹配（多标签）单独填写大类时小类视为空", () => {
     state: "close",
   });
 });
+
+test("按类匹配（多标签）同大类且小类同为空时标绿", () => {
+  const tag: TagDefinition[] = [{ id: 8, name: "分类属性", kind: "category-multi", unit: "" }];
+  const answer = [{ tagId: 8, value: "", entries: [{ category: "自然", value: "" }] }];
+
+  const result = compareGuess(
+    tag,
+    [{ tagId: 8, value: "", entries: [{ category: "自然", value: "" }] }],
+    answer,
+  )[0];
+
+  assert.deepEqual(result, {
+    tagId: 8,
+    value: "",
+    matchedCategories: ["自然"],
+    matchedValues: [],
+    state: "match",
+  });
+});

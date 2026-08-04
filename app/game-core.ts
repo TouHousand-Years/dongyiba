@@ -87,8 +87,15 @@ export function compareGuess(
           .map((entry) => entry.value.trim())
           .filter((guessedSmallValue) => guessedSmallValue && answerEntries.some((entry) => normalizeName(entry.value) === normalizeName(guessedSmallValue))),
       );
+      const hasMatchedEmptyValue = guessedEntries.some((guessedEntry) => {
+        const guessedCategory = guessedEntry.category?.trim() ?? "";
+        return guessedCategory && !guessedEntry.value.trim() && answerEntries.some((answerEntry) => (
+          !answerEntry.value.trim() &&
+          normalizeName(answerEntry.category ?? "") === normalizeName(guessedCategory)
+        ));
+      });
 
-      if (matchedCategories.length && matchedValues.length) {
+      if (matchedCategories.length && (matchedValues.length || hasMatchedEmptyValue)) {
         return {
           tagId: tag.id,
           value: matchedValues.join("、"),
