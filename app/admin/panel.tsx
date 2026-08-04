@@ -158,7 +158,7 @@ export function AdminPanel() {
       setCsvPreview(preview);
       setCsvFilename(file.name);
       const same = hasSameCsvHeaders(catalog, preview);
-      setNotice(`已读取 ${file.name}：${preview.rows.length} 位角色、${preview.tagNames.length} 个标签。${same ? "表头一致，可添加或替换。" : "表头不同，只能替换当前题库。"}`);
+      setNotice(`已读取 ${file.name}：${preview.rows.length} 位角色、${preview.tagNames.length} 个标签。${same ? "标签一致，可添加或替换。" : "标签名称不同，只能替换当前题库。"}`);
     } catch (error) {
       setCsvPreview(null);
       setCsvFilename("");

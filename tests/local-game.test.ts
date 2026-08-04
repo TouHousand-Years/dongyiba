@@ -230,16 +230,50 @@ test("不同 CSV 表头禁止添加，但可替换并重建标签", () => {
   assert.deepEqual(replaced.values.map((item) => item.value), ["中立", "带,逗号"]);
 });
 
-test("CSV 标签只有名称和类型都相同才匹配", () => {
+test("CSV 添加只按标签名称匹配，并采用当前题库的标签类型", () => {
   const catalog = createDefaultCatalog();
   const sameNameDifferentKind = parseCatalogCsv(
     "角色名,别名,启用,初登场年份（类型：exact）,发色（类型：exact）,活动区域（类型：exact-multi）,身份（类型：exact）,种族（类型：category-multi）\n测试角色,,是,2026,紫色,人间之里,测试员,妖怪\n",
   );
 
-  assert.equal(hasSameCsvHeaders(catalog, sameNameDifferentKind), false);
-  assert.throws(() => importCatalogCsv(catalog, sameNameDifferentKind, "append"), /只能选择替换/);
+  assert.equal(hasSameCsvHeaders(catalog, sameNameDifferentKind), true);
+  const appended = importCatalogCsv(catalog, sameNameDifferentKind, "append");
+  assert.equal(appended.tags.find((tag) => tag.name === "初登场年份")?.kind, "ordered");
+  assert.equal(appended.characters.some((character) => character.name === "测试角色"), true);
+
   const replaced = importCatalogCsv(catalog, sameNameDifferentKind, "replace");
   assert.equal(replaced.tags.find((tag) => tag.name === "初登场年份")?.kind, "exact");
+});
+
+test("CSV 替换引起标签重排后仍可按名称正确添加", () => {
+  const catalog = createDefaultCatalog();
+  const replacement = parseCatalogCsv(
+    "角色名,别名,启用,种族（类型：category-multi）,身份（类型：exact）,活动区域（类型：exact-multi）,发色（类型：exact）,初登场年份（类型：ordered）\n替换角色,,是,妖怪,测试员,人间之里,紫色,2025\n",
+  );
+  const replaced = importCatalogCsv(catalog, replacement, "replace");
+
+  assert.equal(hasSameCsvHeaders(replaced, replacement), true);
+
+  const addition = parseCatalogCsv(
+    "角色名,别名,启用,种族（类型：category-multi）,身份（类型：exact）,活动区域（类型：exact-multi）,发色（类型：exact）,初登场年份（类型：ordered）\n添加角色,,是,神明,守矢神社,妖怪之山,蓝色,2007\n",
+  );
+  const appended = importCatalogCsv(replaced, addition, "append");
+  const character = appended.characters.find((item) => item.name === "添加角色")!;
+  const valuesByTagName = Object.fromEntries(appended.tags.map((tag) => [
+    tag.name,
+    (() => {
+      const value = appended.values.find((item) => item.characterId === character.id && item.tagId === tag.id);
+      return value?.category || value?.value;
+    })(),
+  ]));
+
+  assert.deepEqual(valuesByTagName, {
+    初登场年份: "2007",
+    发色: "蓝色",
+    活动区域: "妖怪之山",
+    身份: "守矢神社",
+    种族: "神明",
+  });
 });
 
 test("CSV 标签列表头必须记录类型", () => {

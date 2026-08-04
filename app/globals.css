@@ -101,7 +101,8 @@ h1 { margin: 0; font-size: clamp(44px, 8vw, 72px); font-weight: 700; letter-spac
   width: calc(var(--timing-value-width) + var(--timing-count-width) + 4px);
   margin: 0; display: grid;
   grid-template-columns: var(--timing-value-width) var(--timing-count-width); gap: 4px;
-  color: var(--red-dark); font: 700 14px Arial, sans-serif;
+  align-items: center;
+  color: var(--red-dark); font: 700 14px/1 Arial, sans-serif;
   font-variant-numeric: tabular-nums; text-align: right;
 }
 .average-head { margin-top: 0 !important; }

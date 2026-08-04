@@ -95,8 +95,10 @@ export function getCatalogCsvHeaders(catalog: LocalCatalog): string[] {
 }
 
 export function hasSameCsvHeaders(catalog: LocalCatalog, preview: CatalogCsvPreview): boolean {
-  const current = getCatalogCsvHeaders(catalog);
-  return current.length === preview.headers.length && current.every((header, index) => header === preview.headers[index]);
+  const currentTagNames = catalog.tags.map((tag) => tag.name);
+  const previewTagNames = new Set(preview.tagNames);
+  return currentTagNames.length === preview.tagNames.length
+    && currentTagNames.every((name) => previewTagNames.has(name));
 }
 
 export function parseCatalogCsv(source: string): CatalogCsvPreview {
@@ -169,8 +171,10 @@ export function importCatalogCsv(
     const duplicate = preview.rows.find((row) => existingNames.has(row[0]));
     if (duplicate) throw new Error(`角色“${duplicate[0]}”已存在；添加模式不会覆盖现有角色。`);
     const firstId = catalog.characters.reduce((highest, character) => Math.max(highest, character.id), 0) + 1;
+    const currentTagsByName = new Map(catalog.tags.map((tag) => [tag.name, tag]));
+    const csvOrderedTags = preview.tagNames.map((name) => currentTagsByName.get(name)!);
     const tags = sortTagsByName(catalog.tags);
-    const additions = createCharactersAndValues(preview.rows, tags, firstId);
+    const additions = createCharactersAndValues(preview.rows, csvOrderedTags, firstId);
     return {
       tags,
       characters: [...catalog.characters, ...additions.characters].sort((a, b) => a.name.localeCompare(b.name, "zh-CN")),
