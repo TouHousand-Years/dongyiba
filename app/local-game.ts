@@ -230,7 +230,7 @@ export function submitLocalGuess(
     game: nextGame,
     guess,
     message: won
-      ? `正解！${answer.name} 从弹幕中现身了。`
+      ? `正解！${answer.name} 现身了！`
       : lost
         ? `机会用完了，答案是 ${answer.name}。`
         : `还有 ${game.maxAttempts - attempts} 次机会。`,
