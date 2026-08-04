@@ -3,13 +3,18 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  createNextUnlimitedGame,
   createLocalGame,
+  getElapsedMs,
   getLocalAnswerName,
   loadLocalGame,
+  loadTimingStats,
+  recordCompletedTiming,
   saveLocalGame,
   submitLocalGuess,
   type LocalGame,
   type LocalGameMode,
+  type TimingStats,
 } from "./local-game";
 import { loadLocalCatalog } from "./local-catalog";
 
@@ -21,6 +26,11 @@ export function GameBoard() {
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [timingStats, setTimingStats] = useState<TimingStats>({
+    completedSessionIds: [],
+    winDurationsMs: [],
+  });
 
   function start(nextMode: LocalGameMode = mode, forceNew = false) {
     setBusy(true);
@@ -29,7 +39,9 @@ export function GameBoard() {
       const restored = forceNew ? null : loadLocalGame(nextMode, catalog);
       const nextGame = restored ?? createLocalGame(catalog, nextMode);
       if (!restored) saveLocalGame(nextGame);
+      setTimingStats(nextGame.completed ? recordCompletedTiming(nextGame) : loadTimingStats());
       setGame(nextGame);
+      setNow(Date.now());
       setQuery("");
       setAnswer(nextGame.completed ? getLocalAnswerName(catalog, nextGame) : "");
       setMessage(
@@ -53,6 +65,12 @@ export function GameBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!game || game.timerStartedAt === null || game.completed) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 100);
+    return () => window.clearInterval(timer);
+  }, [game]);
+
   const suggestions = useMemo(() => {
     if (!game || query.trim().length < 1) return [];
     return game.names
@@ -65,13 +83,15 @@ export function GameBoard() {
     if (!game || !query.trim() || answer || busy) return;
     setBusy(true);
     try {
-      const result = submitLocalGuess(loadLocalCatalog(), game, query);
+      const result = submitLocalGuess(loadLocalCatalog(), game, query, Date.now());
       if (!result.ok) {
         setMessage(result.error);
         return;
       }
       setGame(result.game);
       saveLocalGame(result.game);
+      if (result.game.completed) setTimingStats(recordCompletedTiming(result.game));
+      setNow(Date.now());
       setQuery("");
       setMessage(result.message);
       if (result.answer) setAnswer(result.answer);
@@ -84,6 +104,31 @@ export function GameBoard() {
 
   const guesses = game?.guesses ?? [];
   const attemptsLeft = Math.max(0, (game?.maxAttempts ?? 8) - guesses.length);
+  const elapsedMs = game ? getElapsedMs(game, now) : 0;
+  const totalElapsedMs = game ? game.unlimitedElapsedMs + elapsedMs : 0;
+  const timerVisible = Boolean(game && !(game.completed && game.won === false));
+  const recentDurations = timingStats.winDurationsMs.slice(-10);
+  const average = (durations: number[]) => durations.length
+    ? durations.reduce((sum, duration) => sum + duration, 0) / durations.length
+    : null;
+
+  function nextUnlimitedRound() {
+    if (!game || game.mode !== "unlimited" || !game.completed) return;
+    setBusy(true);
+    try {
+      const nextGame = createNextUnlimitedGame(loadLocalCatalog(), game);
+      saveLocalGame(nextGame);
+      setGame(nextGame);
+      setQuery("");
+      setAnswer("");
+      setNow(Date.now());
+      setMessage("新角色已藏好，来猜吧。");
+    } catch {
+      setMessage("下一轮未能开始，请重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <main className="game-shell">
@@ -108,6 +153,14 @@ export function GameBoard() {
         <span><b>{attemptsLeft}</b> 次剩余</span>
       </section>
 
+      {game && timerVisible && (
+        <section className="timer-strip" aria-label="游戏计时" aria-live="off">
+          {mode === "unlimited" && <span><small>总用时</small><b>{formatDuration(totalElapsedMs)}</b></span>}
+          <span><small>{mode === "unlimited" ? "当前人物" : "本局用时"}</small><b>{formatDuration(elapsedMs)}</b></span>
+        </section>
+      )}
+
+      <div className={`play-layout ${mode === "unlimited" ? "with-stats" : ""}`}>
       <section className="game-card" aria-label="东一把游戏挑战">
         <div className="mode-switch" aria-label="选择游戏模式">
           {(["daily", "unlimited"] as const).map((item) => (
@@ -205,7 +258,7 @@ export function GameBoard() {
         )}
 
         {answer && (
-          <button className="again-button" onClick={() => start(mode, true)}>
+          <button className="again-button" onClick={() => mode === "unlimited" ? nextUnlimitedRound() : start(mode, true)}>
             {mode === "daily" ? "再看一遍" : "下一位角色"}
           </button>
         )}
@@ -216,6 +269,29 @@ export function GameBoard() {
           <span><i className="miss" />不符</span>
         </div>
       </section>
+
+      {mode === "unlimited" && game && (
+        <aside className="timing-panel" aria-label="无限模式用时统计">
+          <p className="eyebrow">Run history</p>
+          <h2>本次游戏</h2>
+          {game.unlimitedHistory.length ? (
+            <ol className="round-history">
+              {[...game.unlimitedHistory].reverse().map((round) => (
+                <li key={round.round}>
+                  <span>第 {round.round} 轮 · {round.answer}</span>
+                  <b>{round.won ? formatDuration(round.durationMs) : "未猜出"}</b>
+                </li>
+              ))}
+            </ol>
+          ) : <p className="empty-history">完成当前人物后，这里会记录前几轮用时。</p>}
+          <dl className="averages">
+            <div><dt>最近 10 次平均</dt><dd>{formatAverage(average(recentDurations))}</dd></div>
+            <div><dt>生涯平均用时</dt><dd>{formatAverage(average(timingStats.winDurationsMs))}</dd></div>
+          </dl>
+          <p className="stats-note">平均值仅统计成功猜出的对局</p>
+        </aside>
+      )}
+      </div>
 
       <footer>芊年人间出品·东方 Project 同人小游戏</footer>
 
@@ -235,4 +311,17 @@ export function GameBoard() {
       )}
     </main>
   );
+}
+
+function formatDuration(durationMs: number) {
+  const tenths = Math.max(0, Math.floor(durationMs / 100));
+  const hours = Math.floor(tenths / 36000);
+  const minutes = Math.floor((tenths % 36000) / 600);
+  const seconds = Math.floor((tenths % 600) / 10);
+  const decimal = tenths % 10;
+  return `${hours ? `${String(hours).padStart(2, "0")}:` : ""}${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${decimal}`;
+}
+
+function formatAverage(durationMs: number | null) {
+  return durationMs === null ? "—" : formatDuration(durationMs);
 }

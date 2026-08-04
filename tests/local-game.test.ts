@@ -6,7 +6,14 @@ import {
   loadLocalCatalog,
   saveLocalCatalog,
 } from "../app/local-catalog";
-import { createLocalGame, submitLocalGuess } from "../app/local-game";
+import {
+  createLocalGame,
+  createNextUnlimitedGame,
+  getElapsedMs,
+  loadTimingStats,
+  recordCompletedTiming,
+  submitLocalGuess,
+} from "../app/local-game";
 import {
   exportCatalogCsv,
   hasSameCsvHeaders,
@@ -105,6 +112,90 @@ test("本地游戏可以用别名完成一局并返回标签反馈", () => {
   assert.equal(result.game.completed, true);
   assert.equal(result.guess.feedback.length, game.tags.length);
   assert.equal(result.guess.feedback.every((cell) => cell.state === "match"), true);
+});
+
+test("计时在第一次有效猜测后开始，并在猜中时冻结", () => {
+  const catalog = createDefaultCatalog();
+  const game = createLocalGame(catalog, "unlimited");
+  const answer = catalog.characters.find((item) => item.id === game.answerCharacterId)!;
+  const wrong = catalog.characters.find((item) => item.active && item.id !== answer.id)!;
+
+  const first = submitLocalGuess(catalog, game, wrong.name, 1_000);
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  assert.equal(first.game.timerStartedAt, 1_000);
+  assert.equal(first.game.elapsedMs, 0);
+  assert.equal(getElapsedMs(first.game, 3_500), 2_500);
+
+  const won = submitLocalGuess(catalog, first.game, answer.name, 4_000);
+  assert.equal(won.ok, true);
+  if (!won.ok) return;
+  assert.equal(won.game.completed, true);
+  assert.equal(won.game.won, true);
+  assert.equal(won.game.timerStartedAt, null);
+  assert.equal(won.game.elapsedMs, 3_000);
+  assert.equal(getElapsedMs(won.game, 99_000), 3_000);
+});
+
+test("次数用完时计时冻结并标记为失败", () => {
+  const catalog = createDefaultCatalog();
+  let game = createLocalGame(catalog, "unlimited");
+  const wrongCharacters = catalog.characters
+    .filter((item) => item.active && item.id !== game.answerCharacterId)
+    .slice(0, game.maxAttempts);
+
+  for (const [index, character] of wrongCharacters.entries()) {
+    const result = submitLocalGuess(catalog, game, character.name, (index + 1) * 1_000);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    game = result.game;
+  }
+
+  assert.equal(game.completed, true);
+  assert.equal(game.won, false);
+  assert.equal(game.timerStartedAt, null);
+  assert.equal(game.elapsedMs, 7_000);
+  assert.equal(getElapsedMs(game, 99_000), 7_000);
+});
+
+test("无限模式下一轮会保留本次游戏的累计用时与前轮记录", () => {
+  const catalog = createDefaultCatalog();
+  const game = createLocalGame(catalog, "unlimited");
+  const answer = catalog.characters.find((item) => item.id === game.answerCharacterId)!;
+  const wrong = catalog.characters.find((item) => item.active && item.id !== answer.id)!;
+  const first = submitLocalGuess(catalog, game, wrong.name, 2_000);
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  const won = submitLocalGuess(catalog, first.game, answer.name, 7_000);
+  assert.equal(won.ok, true);
+  if (!won.ok) return;
+
+  const next = createNextUnlimitedGame(catalog, won.game);
+  assert.equal(next.unlimitedRunId, game.unlimitedRunId);
+  assert.equal(next.unlimitedRound, 2);
+  assert.equal(next.unlimitedElapsedMs, 5_000);
+  assert.deepEqual(next.unlimitedHistory, [{
+    round: 1,
+    answer: answer.name,
+    attempts: 2,
+    won: true,
+    durationMs: 5_000,
+  }]);
+});
+
+test("无限模式生涯计时只统计成功对局，且同一局不会重复记录", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  const game = createLocalGame(catalog, "unlimited");
+  const answer = catalog.characters.find((item) => item.id === game.answerCharacterId)!;
+  const won = submitLocalGuess(catalog, game, answer.name, 1_000);
+  assert.equal(won.ok, true);
+  if (!won.ok) return;
+
+  recordCompletedTiming(won.game, storage);
+  recordCompletedTiming(won.game, storage);
+  assert.deepEqual(loadTimingStats(storage).winDurationsMs, [0]);
+  assert.equal(loadTimingStats(storage).completedSessionIds.length, 1);
 });
 
 test("CSV 导出后可按相同表头添加角色", () => {

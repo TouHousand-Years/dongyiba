@@ -23,6 +23,14 @@ export type LocalGuess = {
   feedback: GuessFeedback[];
 };
 
+export type UnlimitedRound = {
+  round: number;
+  answer: string;
+  attempts: number;
+  won: boolean;
+  durationMs: number;
+};
+
 export type LocalGame = {
   sessionId: string;
   dayKey: string;
@@ -34,7 +42,19 @@ export type LocalGame = {
   tags: TagDefinition[];
   attempts: number;
   completed: boolean;
+  won: boolean | null;
+  timerStartedAt: number | null;
+  elapsedMs: number;
+  unlimitedRunId: string | null;
+  unlimitedRound: number;
+  unlimitedElapsedMs: number;
+  unlimitedHistory: UnlimitedRound[];
   guesses: LocalGuess[];
+};
+
+export type TimingStats = {
+  completedSessionIds: string[];
+  winDurationsMs: number[];
 };
 
 export type LocalGuessResult =
@@ -42,6 +62,7 @@ export type LocalGuessResult =
   | { ok: false; error: string };
 
 const GAME_STORAGE_KEY = "dongyiba:games:v1";
+const TIMING_STORAGE_KEY = "dongyiba:timing:v1";
 
 function getBrowserStorage(): LocalStorageLike | null {
   if (typeof window === "undefined") return null;
@@ -99,6 +120,13 @@ export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode): Loc
     tags: toTagDefinitions(tags),
     attempts: 0,
     completed: false,
+    won: null,
+    timerStartedAt: null,
+    elapsedMs: 0,
+    unlimitedRunId: mode === "unlimited" ? newSessionId() : null,
+    unlimitedRound: 1,
+    unlimitedElapsedMs: 0,
+    unlimitedHistory: [],
     guesses: [],
   };
 }
@@ -129,6 +157,24 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
   const guesses = stored.guesses as LocalGuess[];
   const answerCharacterId = Number(stored.answerCharacterId);
   const attempts = guesses.length;
+  const completed = stored.completed === true || attempts >= 8;
+  const elapsedMs = typeof stored.elapsedMs === "number" && Number.isFinite(stored.elapsedMs) && stored.elapsedMs >= 0
+    ? stored.elapsedMs
+    : 0;
+  const timerStartedAt = !completed
+    ? (typeof stored.timerStartedAt === "number" && Number.isFinite(stored.timerStartedAt)
+      ? stored.timerStartedAt
+      : guesses.length > 0 ? Date.now() : null)
+    : null;
+  const unlimitedHistory = Array.isArray(stored.unlimitedHistory)
+    ? stored.unlimitedHistory.filter((item): item is UnlimitedRound => {
+      if (!item || typeof item !== "object") return false;
+      const round = item as Partial<UnlimitedRound>;
+      return Number.isInteger(round.round) && typeof round.answer === "string" &&
+        Number.isInteger(round.attempts) && typeof round.won === "boolean" &&
+        Number.isFinite(round.durationMs) && Number(round.durationMs) >= 0;
+    })
+    : [];
   return {
     sessionId: stored.sessionId,
     dayKey: stored.dayKey,
@@ -139,9 +185,96 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
     names: characters.map((character) => character.name),
     tags: toTagDefinitions(tags),
     attempts,
-    completed: stored.completed === true || attempts >= 8,
+    completed,
+    won: completed
+      ? (typeof stored.won === "boolean" ? stored.won : guesses.some((guess) => guess.id === answerCharacterId))
+      : null,
+    timerStartedAt,
+    elapsedMs,
+    unlimitedRunId: mode === "unlimited"
+      ? (typeof stored.unlimitedRunId === "string" ? stored.unlimitedRunId : stored.sessionId)
+      : null,
+    unlimitedRound: mode === "unlimited" && Number.isInteger(stored.unlimitedRound)
+      ? Math.max(1, Number(stored.unlimitedRound))
+      : 1,
+    unlimitedElapsedMs: mode === "unlimited" && typeof stored.unlimitedElapsedMs === "number" && Number.isFinite(stored.unlimitedElapsedMs)
+      ? Math.max(0, stored.unlimitedElapsedMs)
+      : 0,
+    unlimitedHistory,
     guesses,
   };
+}
+
+export function getElapsedMs(game: LocalGame, now = Date.now()): number {
+  return Math.max(0, game.elapsedMs + (game.timerStartedAt === null ? 0 : now - game.timerStartedAt));
+}
+
+export function createNextUnlimitedGame(catalog: LocalCatalog, previous: LocalGame): LocalGame {
+  if (previous.mode !== "unlimited" || !previous.completed) {
+    throw new Error("只有已结束的无限模式对局可以进入下一轮。");
+  }
+  const next = createLocalGame(catalog, "unlimited");
+  const answer = getLocalAnswerName(catalog, previous);
+  return {
+    ...next,
+    unlimitedRunId: previous.unlimitedRunId ?? previous.sessionId,
+    unlimitedRound: previous.unlimitedRound + 1,
+    unlimitedElapsedMs: previous.unlimitedElapsedMs + previous.elapsedMs,
+    unlimitedHistory: [
+      ...previous.unlimitedHistory,
+      {
+        round: previous.unlimitedRound,
+        answer,
+        attempts: previous.attempts,
+        won: previous.won === true,
+        durationMs: previous.elapsedMs,
+      },
+    ],
+  };
+}
+
+function emptyTimingStats(): TimingStats {
+  return { completedSessionIds: [], winDurationsMs: [] };
+}
+
+export function loadTimingStats(
+  storage: LocalStorageLike | null = getBrowserStorage(),
+): TimingStats {
+  if (!storage) return emptyTimingStats();
+  try {
+    const raw = storage.getItem(TIMING_STORAGE_KEY);
+    if (!raw) return emptyTimingStats();
+    const value = JSON.parse(raw) as Partial<TimingStats>;
+    return {
+      completedSessionIds: Array.isArray(value.completedSessionIds)
+        ? value.completedSessionIds.filter((item): item is string => typeof item === "string")
+        : [],
+      winDurationsMs: Array.isArray(value.winDurationsMs)
+        ? value.winDurationsMs.filter((item): item is number => Number.isFinite(item) && item >= 0)
+        : [],
+    };
+  } catch {
+    return emptyTimingStats();
+  }
+}
+
+export function recordCompletedTiming(
+  game: LocalGame,
+  storage: LocalStorageLike | null = getBrowserStorage(),
+): TimingStats {
+  const stats = loadTimingStats(storage);
+  if (
+    !storage || game.mode !== "unlimited" || !game.completed ||
+    stats.completedSessionIds.includes(game.sessionId)
+  ) return stats;
+  const next = {
+    completedSessionIds: [...stats.completedSessionIds, game.sessionId].slice(-1000),
+    winDurationsMs: game.won === true
+      ? [...stats.winDurationsMs, game.elapsedMs].slice(-1000)
+      : stats.winDurationsMs,
+  };
+  storage.setItem(TIMING_STORAGE_KEY, JSON.stringify(next));
+  return next;
 }
 
 export function loadLocalGame(
@@ -202,6 +335,7 @@ export function submitLocalGuess(
   catalog: LocalCatalog,
   game: LocalGame,
   name: string,
+  now = Date.now(),
 ): LocalGuessResult {
   if (game.completed) return { ok: false, error: "本局已经结束，请开始下一局。" };
   const guessedCharacter = findCharacter(catalog, name);
@@ -213,6 +347,11 @@ export function submitLocalGuess(
   const won = guessedCharacter.id === answer.id;
   const attempts = game.attempts + 1;
   const lost = attempts >= game.maxAttempts && !won;
+  const startsTimer = game.guesses.length === 0 && game.timerStartedAt === null;
+  const activeTimerStartedAt = startsTimer ? now : game.timerStartedAt;
+  const elapsedMs = won || lost
+    ? Math.max(0, game.elapsedMs + (activeTimerStartedAt === null ? 0 : now - activeTimerStartedAt))
+    : game.elapsedMs;
   const guess: LocalGuess = {
     id: guessedCharacter.id,
     name: guessedCharacter.name,
@@ -222,6 +361,9 @@ export function submitLocalGuess(
     ...game,
     attempts,
     completed: won || lost,
+    won: won || lost ? won : null,
+    timerStartedAt: won || lost ? null : activeTimerStartedAt,
+    elapsedMs,
     guesses: [...game.guesses, guess],
   };
 
