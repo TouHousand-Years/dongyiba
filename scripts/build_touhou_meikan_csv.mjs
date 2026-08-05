@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const outputPath = path.resolve("db/touhou_meikan.csv");
+const outputPath = path.resolve("db/东一把题库.csv");
 
 const WORKS = [
   ["__TH01__", "东方灵异传", ["博丽灵梦"]],
@@ -198,25 +198,49 @@ function csvCell(value) {
 const sourceRows = parseCsv(fs.readFileSync(outputPath, "utf8"));
 if (sourceRows.length < 2) throw new Error("题库 CSV 为空，无法解析作品占位符。");
 const headers = sourceRows[0];
-if (headers[0] !== "角色名" || headers[3] !== "初登场作品（类型：exact）") {
+const columnIndex = (header) => headers.indexOf(header);
+const workColumn = columnIndex("初登场作品（类型：exact）");
+const playableColumn = columnIndex("是自机吗？（类型：category-multi）");
+const yearColumn = columnIndex("初登场年份（类型：ordered）");
+const enemyColumn = columnIndex("是敌人吗？（仅整数非对战新作）（类型：category-multi）");
+const hairColumn = columnIndex("发色（类型：exact-multi）");
+const locationColumn = columnIndex("所属地点（类型：category-multi）");
+const raceColumn = columnIndex("种族（类型：category-multi）");
+if (headers[0] !== "角色名" || [workColumn, playableColumn, yearColumn, enemyColumn, hairColumn, locationColumn, raceColumn].some((index) => index < 0)) {
   throw new Error("题库 CSV 表头不符合项目格式。");
 }
 
+function normalizeNewRow(row) {
+  const next = Array.from({ length: headers.length }, () => "");
+  next[0] = row[0];
+  next[1] = row[1];
+  next[2] = row[2];
+  next[workColumn] = row[3];
+  next[hairColumn] = row[4];
+  next[locationColumn] = row[5];
+  next[raceColumn] = row[6];
+  next[playableColumn] = row[7];
+  next[yearColumn] = row[8];
+  next[enemyColumn] = row[9];
+  return next;
+}
+
+const normalizedNewRows = NEW_ROWS.map(normalizeNewRow);
 const existingNames = new Set(sourceRows.slice(1).map((row) => row[0]));
-for (const row of NEW_ROWS) {
+for (const row of normalizedNewRows) {
   if (!existingNames.has(row[0])) {
     sourceRows.push(row);
     existingNames.add(row[0]);
   }
 }
-const newCharacterNames = new Set(NEW_ROWS.map((row) => row[0]));
+const newCharacterNames = new Set(normalizedNewRows.map((row) => row[0]));
 
 const mode = process.argv[2] ?? "resolve";
 if (mode === "prepare") {
   const rows = sourceRows.slice(1).map((row) => {
     const next = [...row];
-    next[3] = "__WORK_PENDING__";
-    next[7] = "__PLAYABLE_PENDING__";
+    next[workColumn] = "__WORK_PENDING__";
+    next[playableColumn] = "__PLAYABLE_PENDING__";
     return next;
   });
   const output = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
@@ -274,9 +298,9 @@ const rows = sourceRows.slice(1).map((row) => {
   const resolvedWork = titleByPlaceholder.get(placeholder);
   if (!resolvedWork) throw new Error(`无法解析角色的作品占位符：${row[0]}`);
   const next = [...row];
-  if (newCharacterNames.has(row[0]) || row[3].startsWith("__")) next[3] = resolvedWork;
-  if (newCharacterNames.has(row[0]) || row[7].startsWith("__")) next[7] = playableByCharacter.get(row[0]);
-  if (IGNORED_LEGACY_ENEMY_CHARACTERS.has(row[0])) next[9] = NOT_ENEMY;
+  if (newCharacterNames.has(row[0]) || row[workColumn].startsWith("__")) next[workColumn] = resolvedWork;
+  if (newCharacterNames.has(row[0]) || row[playableColumn].startsWith("__")) next[playableColumn] = playableByCharacter.get(row[0]);
+  if (IGNORED_LEGACY_ENEMY_CHARACTERS.has(row[0])) next[enemyColumn] = NOT_ENEMY;
   return next;
 });
 

@@ -8,6 +8,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $port = 3000
 $localUrl = "http://localhost:$port/"
 $vinextCli = Join-Path $projectRoot "node_modules\vinext\dist\cli.js"
+$catalogGenerator = Join-Path $projectRoot "scripts\generate_default_catalog.mjs"
 $server = $null
 
 function Test-LocalSite {
@@ -31,6 +32,9 @@ try {
   if (-not (Test-Path -LiteralPath $vinextCli)) {
     throw "Local dependencies are missing. Run npm install in the project folder first."
   }
+  if (-not (Test-Path -LiteralPath $catalogGenerator)) {
+    throw "The default catalog generator is missing."
+  }
 
   if (Test-LocalSite) {
     Write-Host "The local site is already running. Opening $localUrl"
@@ -40,6 +44,10 @@ try {
   }
 
   $node = (Get-Command node.exe -ErrorAction Stop).Source
+  & $node $catalogGenerator
+  if ($LASTEXITCODE -ne 0) {
+    throw "The default catalog could not be generated."
+  }
   $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
   $startInfo.FileName = $node
   $startInfo.Arguments = "`"$vinextCli`" dev --host 127.0.0.1 --port $port"

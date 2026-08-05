@@ -5,6 +5,7 @@ import {
   createDefaultCatalog,
   loadLocalCatalog,
   saveLocalCatalog,
+  type LocalCatalog,
 } from "../app/local-catalog";
 import {
   createLocalGame,
@@ -43,25 +44,30 @@ test("默认题库可以在本地存储中读写", () => {
   saveLocalCatalog(catalog, storage);
 
   const loaded = loadLocalCatalog(storage);
-  assert.equal(loaded.characters.length, 20);
-  assert.equal(loaded.tags.length, 5);
-  assert.equal(loaded.values.length, 100);
+  assert.equal(loaded.characters.length, 135);
+  assert.equal(loaded.tags.length, 7);
+  assert.equal(loaded.values.length, 945);
+  assert.equal(loaded.tags.find((item) => item.name === "初登场年份")?.kind, "ordered");
+  assert.equal(loaded.tags.find((item) => item.name === "初登场作品")?.kind, "exact");
+  assert.equal(loaded.tags.find((item) => item.name === "发色")?.kind, "exact-multi");
   assert.equal(loaded.tags.find((item) => item.name === "种族")?.kind, "category-multi");
-  assert.equal(loaded.tags.find((item) => item.name === "活动区域")?.kind, "exact-multi");
-  assert.deepEqual(loaded.characters.find((item) => item.name === "琪露诺")?.aliases, ["⑨"]);
+  assert.equal(loaded.tags.find((item) => item.name === "所属地点")?.kind, "category-multi");
+  assert.deepEqual(loaded.characters.find((item) => item.name === "驹草山如")?.aliases, ["驹草太夫"]);
 });
 
 test("旧题库载入时自动迁移种族和活动区域的匹配方式", () => {
   const storage = new MemoryStorage();
-  const legacy = createDefaultCatalog();
-  legacy.tags = legacy.tags.map((tag) => (
-    tag.name === "种族" || tag.name === "活动区域" ? { ...tag, kind: "exact" as const } : tag
-  ));
-  legacy.values = legacy.values.map((item) => ({
-    characterId: item.characterId,
-    tagId: item.tagId,
-    value: item.value,
-  }));
+  const legacy: LocalCatalog = {
+    tags: [
+      { id: 1, name: "种族", kind: "exact", unit: "", active: true },
+      { id: 2, name: "活动区域", kind: "exact", unit: "", active: true },
+    ],
+    characters: [{ id: 1, name: "测试角色", aliases: [], active: true }],
+    values: [
+      { characterId: 1, tagId: 1, value: "妖怪" },
+      { characterId: 1, tagId: 2, value: "博丽神社" },
+    ],
+  };
   saveLocalCatalog(legacy, storage);
 
   const migrated = loadLocalCatalog(storage);
@@ -78,7 +84,8 @@ test("本地后台操作会更新题库并级联清理标签值", () => {
     action: "saveTag",
     name: "瞳色",
   });
-  assert.deepEqual(withTag.tags.map((tag) => tag.name), ["初登场年份", "发色", "活动区域", "身份", "瞳色", "种族"]);
+  assert.equal(withTag.tags.length, catalog.tags.length + 1);
+  assert.equal(withTag.tags.some((tag) => tag.name === "瞳色"), true);
   const eyeColorTag = withTag.tags.find((tag) => tag.name === "瞳色")!;
 
   const withCharacter = applyCatalogMutation(withTag, {
@@ -204,16 +211,21 @@ test("CSV 导出后可按相同表头添加角色", () => {
   const exported = exportCatalogCsv(catalog);
   const preview = parseCatalogCsv(exported);
   assert.equal(hasSameCsvHeaders(catalog, preview), true);
-  assert.deepEqual(preview.tagKinds, ["ordered", "exact", "exact-multi", "exact", "category-multi"]);
-  assert.equal(preview.rows.length, 20);
-  assert.equal(preview.rows[0][0], "博丽灵梦");
+  assert.deepEqual(preview.tagKinds, catalog.tags.map((tag) => tag.kind));
+  assert.equal(preview.rows.length, catalog.characters.length);
+  assert.equal(preview.rows[0][0], catalog.characters[0].name);
 
-  const addition = parseCatalogCsv("角色名,别名,启用,初登场年份（类型：ordered）,发色（类型：exact）,活动区域（类型：exact-multi）,身份（类型：exact）,种族（类型：category-multi）\r\n测试角色,测试、测测,是,2026,紫色,人间之里,测试员,妖怪\r\n");
+  const addition = parseCatalogCsv([
+    preview.headers.join(","),
+    ["测试角色", "测试、测测", "是", ...catalog.tags.map((tag) => (
+      tag.kind === "ordered" ? "2026" : tag.kind === "category-multi" ? "测试大类" : "测试值"
+    ))].join(","),
+  ].join("\r\n"));
   const added = importCatalogCsv(catalog, addition, "append");
-  assert.equal(added.characters.length, 21);
+  assert.equal(added.characters.length, catalog.characters.length + 1);
   const character = added.characters.find((item) => item.name === "测试角色")!;
   assert.deepEqual(character.aliases, ["测试", "测测"]);
-  assert.equal(added.values.filter((item) => item.characterId === character.id).length, 5);
+  assert.equal(added.values.filter((item) => item.characterId === character.id).length, catalog.tags.length);
 });
 
 test("不同 CSV 表头禁止添加，但可替换并重建标签", () => {
@@ -232,8 +244,19 @@ test("不同 CSV 表头禁止添加，但可替换并重建标签", () => {
 
 test("CSV 添加只按标签名称匹配，并采用当前题库的标签类型", () => {
   const catalog = createDefaultCatalog();
+  const headers = [
+    "角色名",
+    "别名",
+    "启用",
+    ...catalog.tags.map((tag) => `${tag.name}（类型：${tag.name === "初登场年份" ? "exact" : tag.kind}）`),
+  ];
   const sameNameDifferentKind = parseCatalogCsv(
-    "角色名,别名,启用,初登场年份（类型：exact）,发色（类型：exact）,活动区域（类型：exact-multi）,身份（类型：exact）,种族（类型：category-multi）\n测试角色,,是,2026,紫色,人间之里,测试员,妖怪\n",
+    [
+      headers.join(","),
+      ["测试角色", "", "是", ...catalog.tags.map((tag) => (
+        tag.name === "初登场年份" ? "2026" : tag.kind === "category-multi" ? "测试大类" : "测试值"
+      ))].join(","),
+    ].join("\n"),
   );
 
   assert.equal(hasSameCsvHeaders(catalog, sameNameDifferentKind), true);

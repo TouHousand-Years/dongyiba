@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-const filePath = "db/touhou_meikan.csv";
+const filePath = "db/东一把题库.csv";
 const source = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
 const rows = [];
 let row = [];
@@ -38,54 +38,51 @@ if (field || row.length) {
 
 const expectedHeaders = [
   "角色名", "别名", "启用",
-  "初登场作品（类型：exact）", "发色（类型：exact-multi）", "所属地点（类型：category-multi）",
-  "种族（类型：category-multi）", "是自机吗？（类型：category-multi）",
-  "初登场年份（类型：ordered）", "是敌人吗？（仅整数非对战作）（类型：category-multi）",
+  "初登场年份（类型：ordered）", "初登场作品（类型：exact）", "发色（类型：exact-multi）",
+  "是敌人吗？（仅整数非对战新作）（类型：category-multi）", "是自机吗？（类型：category-multi）",
+  "所属地点（类型：category-multi）", "种族（类型：category-multi）",
 ];
 if (JSON.stringify(rows[0]) !== JSON.stringify(expectedHeaders)) {
   throw new Error(`表头不匹配：${JSON.stringify(rows[0])}`);
 }
 const dataRows = rows.slice(1).filter((item) => item.some((cell) => cell.trim() !== ""));
-if (dataRows.length !== 133) throw new Error(`行数应为 133，实际为 ${dataRows.length}`);
+if (dataRows.length !== 135) throw new Error(`行数应为 135，实际为 ${dataRows.length}`);
 const names = dataRows.map((item) => item[0]);
 if (new Set(names).size !== names.length) throw new Error("存在重复角色名。");
 const roots = new Set(["人类", "妖怪", "神明"]);
 const playRoots = new Set(["是", "不是"]);
-const ignoredLegacyEnemyCharacters = new Set([
-  "博丽灵梦",
-  "雾雨魔理沙",
-  "风见幽香",
-  "爱丽丝·玛格特洛依德",
-]);
+const yearColumn = expectedHeaders.indexOf("初登场年份（类型：ordered）");
+const workColumn = expectedHeaders.indexOf("初登场作品（类型：exact）");
+const enemyColumn = expectedHeaders.indexOf("是敌人吗？（仅整数非对战新作）（类型：category-multi）");
+const playableColumn = expectedHeaders.indexOf("是自机吗？（类型：category-multi）");
+const locationColumn = expectedHeaders.indexOf("所属地点（类型：category-multi）");
+const raceColumn = expectedHeaders.indexOf("种族（类型：category-multi）");
 for (const [index, item] of dataRows.entries()) {
   if (item.length !== expectedHeaders.length) throw new Error(`第 ${index + 2} 行列数不为 ${expectedHeaders.length}。`);
   if (!item[0].trim() || !item[2].trim()) throw new Error(`第 ${index + 2} 行基础字段为空。`);
-  if (!item[3].trim() || /^\d{4} > /.test(item[3])) throw new Error(`第 ${index + 2} 行作品字段格式错误：${item[3]}`);
-  if (!/^\d{4}$/.test(item[8])) throw new Error(`第 ${index + 2} 行初登场年份格式错误：${item[8]}`);
-  if (!item[5].trim()) throw new Error(`第 ${index + 2} 行所属地点为空。`);
-  if (item[5].includes("、") || item[5].split(" | ").slice(1).some((area) => !area.trim())) {
-    throw new Error(`第 ${index + 2} 行活动区域多标签格式错误：${item[5]}`);
+  if (!item[workColumn].trim()) throw new Error(`第 ${index + 2} 行作品字段为空。`);
+  if (!/^\d{4}$/.test(item[yearColumn])) throw new Error(`第 ${index + 2} 行初登场年份格式错误：${item[yearColumn]}`);
+  if (!item[locationColumn].trim()) throw new Error(`第 ${index + 2} 行所属地点为空。`);
+  if (item[locationColumn].includes("、") || item[locationColumn].split(" | ").some((area) => !area.trim())) {
+    throw new Error(`第 ${index + 2} 行所属地点多标签格式错误：${item[locationColumn]}`);
   }
-  for (const entry of item[6].split(" | ")) {
+  for (const entry of item[raceColumn].split(" | ")) {
     const [category, value] = entry.split(" > ");
-    if (!roots.has(category) || !value) throw new Error(`第 ${index + 2} 行种族分类错误：${entry}`);
+    if (!roots.has(category) || (entry.includes(" > ") && !value)) throw new Error(`第 ${index + 2} 行种族分类错误：${entry}`);
   }
-  for (const entry of item[7].split(" | ")) {
+  for (const entry of item[playableColumn].split(" | ")) {
     const [category, value] = entry.split(" > ");
-    if (!playRoots.has(category) || !value) throw new Error(`第 ${index + 2} 行自机分类错误：${entry}`);
-    if (category === "不是" && value !== "不是") throw new Error(`第 ${index + 2} 行“不是”小类错误：${entry}`);
+    if (!playRoots.has(category)) throw new Error(`第 ${index + 2} 行自机分类错误：${entry}`);
+    if (category === "不是" && value && value !== "不是") throw new Error(`第 ${index + 2} 行“不是”小类错误：${entry}`);
     if (category === "是" && !["是弹幕作", "是格斗作"].includes(value)) throw new Error(`第 ${index + 2} 行自机小类错误：${entry}`);
   }
-  for (const entry of item[9].split(" | ")) {
+  for (const entry of item[enemyColumn].split(" | ")) {
     const [category, value] = entry.split(" > ");
-    if (!["是", "不是"].includes(category) || !value) throw new Error(`第 ${index + 2} 行敌人分类错误：${entry}`);
-    if (category === "不是" && value !== "不是") throw new Error(`第 ${index + 2} 行“不是”敌人小类错误：${entry}`);
-    if (category === "是" && value !== "是EX面" && !/^是第\d+面$/.test(value)) {
+    if (!["是", "不是"].includes(category)) throw new Error(`第 ${index + 2} 行敌人分类错误：${entry}`);
+    if (category === "不是" && value && value !== "不是") throw new Error(`第 ${index + 2} 行“不是”敌人小类错误：${entry}`);
+    if (category === "是" && value !== "是EX/PH面" && !/^是第\d+面$/.test(value)) {
       throw new Error(`第 ${index + 2} 行“是”敌人小类错误：${entry}`);
     }
-  }
-  if (ignoredLegacyEnemyCharacters.has(item[0]) && item[9] !== "不是 > 不是") {
-    throw new Error(`第 ${index + 2} 行不应计入旧作敌人身份：${item[0]}`);
   }
   if (item.some((cell) => /__(WORK|PLAYABLE)_/.test(cell))) throw new Error(`第 ${index + 2} 行残留占位符。`);
 }

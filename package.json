@@ -6,9 +6,13 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "predev": "node scripts/generate_default_catalog.mjs",
     "dev": "vinext dev",
+    "prebuild": "node scripts/generate_default_catalog.mjs",
     "build": "vinext build",
+    "prestart": "node scripts/generate_default_catalog.mjs",
     "start": "vinext start",
+    "prelint": "node scripts/generate_default_catalog.mjs",
     "test": "npm run build && node --test tests/rendered-html.test.mjs && node --import tsx --test tests/game-core.test.ts tests/local-game.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },

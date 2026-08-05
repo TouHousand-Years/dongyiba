@@ -1,4 +1,5 @@
 import type { TagDefinition, TagKind, TagValueEntry } from "./game-core";
+import { defaultCatalog } from "./default-catalog.generated";
 
 export type LocalTag = {
   id: number;
@@ -55,14 +56,6 @@ export type CatalogMutation =
 
 const CATALOG_STORAGE_KEY = "dongyiba:catalog:v1";
 
-const seedTags = [
-  [1, "种族", "category-multi", ""],
-  [2, "活动区域", "exact-multi", ""],
-  [3, "发色", "exact", ""],
-  [4, "初登场年份", "ordered", "年"],
-  [5, "身份", "exact", ""],
-] as const;
-
 const REQUIRED_TAG_KINDS: Readonly<Record<string, TagKind>> = {
   "种族": "category-multi",
   "活动区域": "exact-multi",
@@ -89,54 +82,16 @@ function migrateRequiredValues(tags: LocalTag[], values: LocalValue[]): LocalVal
   });
 }
 
-const seedCharacters = [
-  [1, "博丽灵梦", ["灵梦"], ["人类", "博丽神社", "黑色", "1997", "巫女"]],
-  [2, "雾雨魔理沙", ["魔理沙"], ["人类", "魔法森林", "金色", "1997", "魔法使"]],
-  [3, "露米娅", [], ["妖怪", "魔法森林", "金色", "2002", "黑暗妖怪"]],
-  [4, "琪露诺", ["⑨"], ["妖精", "雾之湖", "蓝色", "2002", "冰之妖精"]],
-  [5, "红美铃", ["美铃"], ["妖怪", "红魔馆", "红色", "2002", "门番"]],
-  [6, "帕秋莉·诺蕾姬", ["帕秋莉"], ["魔法使", "红魔馆", "紫色", "2002", "图书管理员"]],
-  [7, "十六夜咲夜", ["咲夜"], ["人类", "红魔馆", "银色", "2002", "女仆长"]],
-  [8, "蕾米莉亚·斯卡蕾特", ["蕾米莉亚"], ["吸血鬼", "红魔馆", "蓝色", "2002", "馆主"]],
-  [9, "芙兰朵露·斯卡蕾特", ["芙兰朵露"], ["吸血鬼", "红魔馆", "金色", "2002", "馆主之妹"]],
-  [10, "魂魄妖梦", ["妖梦"], ["半人半灵", "白玉楼", "银色", "2003", "庭师"]],
-  [11, "西行寺幽幽子", ["幽幽子"], ["亡灵", "白玉楼", "粉色", "2003", "亡灵公主"]],
-  [12, "八云紫", ["紫"], ["妖怪", "迷途之家", "金色", "2003", "隙间妖怪"]],
-  [13, "铃仙·优昙华院·因幡", ["铃仙"], ["月兔", "永远亭", "紫色", "2004", "药师学徒"]],
-  [14, "蓬莱山辉夜", ["辉夜"], ["月人", "永远亭", "黑色", "2004", "公主"]],
-  [15, "藤原妹红", ["妹红"], ["人类", "迷途竹林", "银色", "2004", "蓬莱人"]],
-  [16, "射命丸文", ["文"], ["天狗", "妖怪之山", "黑色", "2005", "记者"]],
-  [17, "东风谷早苗", ["早苗"], ["人类", "守矢神社", "绿色", "2007", "风祝"]],
-  [18, "古明地觉", ["觉"], ["妖怪", "地灵殿", "粉色", "2008", "地灵殿主人"]],
-  [19, "古明地恋", ["恋"], ["妖怪", "地灵殿", "绿色", "2008", "觉之妹"]],
-  [20, "秦心", [], ["面灵气", "人间之里", "粉色", "2013", "付丧神"]],
-] as const;
-
 export function createDefaultCatalog(): LocalCatalog {
-  const tags = seedTags.map(([id, name, kind, unit]) => ({
-    id,
-    name,
-    kind,
-    unit,
-    active: true,
-  }));
-  return {
-    tags: sortTagsByName(tags),
-    characters: seedCharacters.map(([id, name, aliases]) => ({
-      id,
-      name,
-      aliases: [...aliases],
-      active: true,
-    })),
-    values: seedCharacters.flatMap(([characterId, , , values]) =>
-      values.map((value, index) => ({
-        characterId,
-        tagId: seedTags[index][0],
-        value,
-        ...(seedTags[index][1] === "种族" ? { category: LEGACY_RACE_CATEGORY } : {}),
-      })),
-    ),
-  };
+  const tags = migrateRequiredTagKinds(defaultCatalog.tags.map((tag) => ({ ...tag })));
+  return sortCatalog({
+    tags,
+    characters: defaultCatalog.characters.map((character) => ({ ...character, aliases: [...character.aliases] })),
+    values: migrateRequiredValues(tags, defaultCatalog.values.map((item) => ({
+      ...item,
+      ...(item.entries ? { entries: item.entries.map((entry) => ({ ...entry })) } : {}),
+    }))),
+  });
 }
 
 function getBrowserStorage(): LocalStorageLike | null {

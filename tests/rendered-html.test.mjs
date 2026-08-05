@@ -32,7 +32,7 @@ test("游戏页与后台共用本地题库，不请求远程服务", async () =>
   assert.match(panel, /标签按名称首字自动排序/);
   assert.doesNotMatch(panel, /<label>排序/);
   assert.match(catalog, /dongyiba:catalog:v1/);
-  assert.match(catalog, /博丽灵梦/);
+  assert.match(catalog, /default-catalog\.generated/);
   assert.match(game, /submitLocalGuess/);
   assert.match(game, /dongyiba:games:v1/);
   assert.doesNotMatch(`${panel}${game}`, /fetch\(/);
@@ -47,4 +47,5 @@ test("提供双击启动本地网页的快捷脚本", async () => {
   assert.match(launcher, /scripts\\start-local\.ps1/);
   assert.match(script, /localhost:\$port/);
   assert.match(script, /Start-Process \$localUrl/);
+  assert.match(script, /generate_default_catalog\.mjs/);
 });
