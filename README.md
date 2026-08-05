@@ -12,7 +12,17 @@ npm run dev
 
 然后打开终端显示的本地地址即可。游戏题库、猜测进度以及后台编辑内容都保存在当前浏览器的 `localStorage` 中，断网也可以使用。
 
-也可以直接双击项目根目录的 `启动东一把.cmd`。它会自动启动本地服务并打开浏览器；保持启动窗口运行即可使用网页，关闭窗口会停止服务。
+构建过静态文件后，也可以直接双击项目根目录的 `启动东一把.cmd`。它会使用 Windows PowerShell 启动本地静态服务并打开浏览器；保持启动窗口运行即可使用网页，关闭窗口会停止服务。
+
+## Windows 便携版
+
+在已经安装依赖的开发电脑上执行：
+
+```bash
+npm run package:windows
+```
+
+命令会按照 `package.json` 的版本号生成压缩包，例如 `release/dongyiba-windows-v0.1.0.zip`。把该压缩包复制到目标 Windows 电脑并完整解压，然后双击 `start-dongyiba.cmd` 即可。目标电脑不需要 Node.js、npm 或 `node_modules`，只需系统自带的 Windows PowerShell 5.1 或更高版本。
 
 ## 页面
 

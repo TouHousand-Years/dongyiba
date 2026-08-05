@@ -9,11 +9,12 @@
     "predev": "node scripts/generate_default_catalog.mjs",
     "dev": "vinext dev",
     "prebuild": "node scripts/generate_default_catalog.mjs",
-    "build": "vinext build",
+    "build": "node scripts/build-static.mjs",
+    "package:windows": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/build-portable.ps1",
     "prestart": "node scripts/generate_default_catalog.mjs",
     "start": "vinext start",
     "prelint": "node scripts/generate_default_catalog.mjs",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs && node --import tsx --test tests/game-core.test.ts tests/local-game.test.ts",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs && node --require ./scripts/tsx-userinfo-fallback.cjs --import tsx --test tests/game-core.test.ts tests/local-game.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {

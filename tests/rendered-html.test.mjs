@@ -39,13 +39,21 @@ test("游戏页与后台共用本地题库，不请求远程服务", async () =>
   assert.doesNotMatch(panel, /无需登录|无需联网|本地模式|本机浏览器|当前浏览器|本地题库/);
 });
 
-test("提供双击启动本地网页的快捷脚本", async () => {
-  const [launcher, script] = await Promise.all([
+test("提供无需 Node.js 和 node_modules 的 Windows 便携版", async () => {
+  const [launcher, script, packager, config] = await Promise.all([
     readFile(new URL("../启动东一把.cmd", import.meta.url), "utf8"),
     readFile(new URL("../scripts/start-local.ps1", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/build-portable.ps1", import.meta.url), "utf8"),
+    readFile(new URL("../next.config.ts", import.meta.url), "utf8"),
   ]);
   assert.match(launcher, /scripts\\start-local\.ps1/);
-  assert.match(script, /localhost:\$port/);
-  assert.match(script, /Start-Process \$localUrl/);
-  assert.match(script, /generate_default_catalog\.mjs/);
+  assert.match(script, /http:\/\/127\.0\.0\.1:\$port\//);
+  assert.match(script, /TcpListener/);
+  assert.match(script, /dist\\client/);
+  assert.doesNotMatch(script, /node_modules|npm install|generate_default_catalog/);
+  assert.match(packager, /start-dongyiba\.cmd/);
+  assert.match(packager, /packageJson\.version/);
+  assert.match(packager, /VERSION\.txt/);
+  assert.match(packager, /Compress-Archive/);
+  assert.match(config, /output: "export"/);
 });
