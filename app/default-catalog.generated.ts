@@ -434,7 +434,9 @@ export const defaultCatalog: LocalCatalog = {
     {
       "id": 63,
       "name": "莉莉霍瓦特",
-      "aliases": [],
+      "aliases": [
+        "莉莉白"
+      ],
       "active": true
     },
     {
@@ -3779,12 +3781,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 41,
       "tagId": 7,
-      "value": "河童",
+      "value": "",
       "category": "妖怪",
       "entries": [
         {
-          "value": "河童",
-          "category": "妖怪"
+          "category": "妖怪",
+          "value": ""
         }
       ]
     },
