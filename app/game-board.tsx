@@ -18,6 +18,10 @@ import {
 } from "./local-game";
 import { loadLocalCatalog } from "./local-catalog";
 
+type PageTheme = "dong" | "flandre";
+
+const THEME_STORAGE_KEY = "dongyiba:theme:v1";
+
 export function GameBoard() {
   const [game, setGame] = useState<LocalGame | null>(null);
   const [mode, setMode] = useState<LocalGameMode>("daily");
@@ -26,6 +30,7 @@ export function GameBoard() {
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [pageTheme, setPageTheme] = useState<PageTheme>("dong");
   const [now, setNow] = useState(() => Date.now());
   const [timingStats, setTimingStats] = useState<TimingStats>({
     completedSessionIds: [],
@@ -65,6 +70,21 @@ export function GameBoard() {
     start("daily");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedTheme === "flandre") {
+      // Theme preference is intentionally restored after hydration.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPageTheme("flandre");
+    }
+  }, []);
+
+  useEffect(() => {
+    document.title = pageTheme === "flandre"
+      ? "芙一把｜猜东方 Project 角色"
+      : "东一把｜猜东方 Project 角色";
+  }, [pageTheme]);
 
   useEffect(() => {
     if (!game || game.timerStartedAt === null || game.completed) return;
@@ -132,21 +152,46 @@ export function GameBoard() {
     }
   }
 
+  function togglePageTheme() {
+    setPageTheme((currentTheme) => {
+      const nextTheme = currentTheme === "dong" ? "flandre" : "dong";
+      window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+      return nextTheme;
+    });
+  }
+
+  const isFlandreTheme = pageTheme === "flandre";
+
   return (
-    <main className="game-shell">
+    <main className={`game-shell theme-${pageTheme}`}>
       <div className="mist mist-one" />
       <div className="mist mist-two" />
       <header className="topbar">
         <p className="challenge">每日挑战 #{game?.challengeNumber ?? "—"}</p>
-        <Link className="admin-link" href="/admin">标签后台</Link>
-        <button className="ghost-button" onClick={() => setShowHelp(true)}>游戏玩法</button>
+        <div className="topbar-actions">
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-pressed={isFlandreTheme}
+            aria-label={isFlandreTheme ? "切换到东一把主题" : "切换到芙一把主题"}
+            onClick={togglePageTheme}
+          >
+            <span className="theme-gem" aria-hidden="true" />
+            {isFlandreTheme ? "东一把" : "芙一把"}
+          </button>
+          <Link className="admin-link" href="/admin">标签后台</Link>
+          <button className="ghost-button" onClick={() => setShowHelp(true)}>游戏玩法</button>
+        </div>
       </header>
 
       <section className="hero">
-        <div className="crest" aria-hidden="true">東</div>
-        <p className="eyebrow">Gensokyo character puzzle</p>
-        <h1>东一把</h1>
-        <p className="subtitle">猜出隐藏的那位东方角色</p>
+        <div className="crystal-wings" aria-hidden="true">
+          {Array.from({ length: 12 }, (_, index) => <i key={index} />)}
+        </div>
+        <div className="crest" aria-hidden="true">{isFlandreTheme ? "芙" : "東"}</div>
+        <p className="eyebrow">{isFlandreTheme ? "Scarlet character puzzle" : "Gensokyo character puzzle"}</p>
+        <h1>{isFlandreTheme ? "芙一把" : "东一把"}</h1>
+        <p className="subtitle">{isFlandreTheme ? "猜出隐藏的那位东方角色" : "猜出隐藏的那位东方角色"}</p>
       </section>
 
       <section className="status-strip" aria-label="今日挑战状态">

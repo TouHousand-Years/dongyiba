@@ -34,12 +34,19 @@ button { cursor: pointer; }
 .mist-two { width: 440px; height: 440px; border: 1px solid rgba(165,40,65,.08); right: -240px; bottom: -100px; }
 .topbar { max-width: 920px; margin: auto; display: flex; align-items: center; gap: 12px; position: relative; z-index: 2; }
 .challenge { margin: 0 auto 0 0; color: var(--muted); font-size: 14px; letter-spacing: .08em; }
-.ghost-button, .admin-link {
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.ghost-button, .admin-link, .theme-toggle {
   border: 1px solid #d7c8c4; background: rgba(255,255,255,.62); color: var(--ink);
   border-radius: 999px; padding: 9px 14px; text-decoration: none; font-size: 13px;
 }
-.ghost-button:hover, .admin-link:hover { border-color: var(--red); color: var(--red); }
+.ghost-button:hover, .admin-link:hover, .theme-toggle:hover { border-color: var(--red); color: var(--red); }
+.theme-toggle { display: inline-flex; align-items: center; gap: 8px; }
+.theme-gem {
+  width: 9px; height: 9px; display: inline-block; border-radius: 2px; transform: rotate(45deg);
+  background: var(--red); box-shadow: 0 0 0 2px rgba(165,40,65,.12);
+}
 .hero { text-align: center; margin: 54px auto 24px; position: relative; z-index: 1; }
+.crystal-wings { display: none; }
 .crest {
   width: 54px; height: 54px; margin: 0 auto 15px; display: grid; place-items: center;
   border: 1px solid var(--red); color: var(--red); transform: rotate(45deg);
@@ -160,12 +167,154 @@ footer { text-align: center; color: #998d92; font-size: 11px; letter-spacing: .0
 .help-row i { flex: 0 0 auto; width: 16px; height: 16px; }
 .modal-close { position: absolute; top: 12px; right: 14px; border: 0; background: none; font: 26px/1 Arial; color: var(--muted); }
 
+/* 芙一把：红魔馆夜色、猩红月光与七彩晶翼。 */
+.game-shell.theme-flandre {
+  --ink: #f9edf2;
+  --muted: #c6aeb9;
+  --paper: #120a12;
+  --paper-deep: #28131e;
+  --red: #f13b62;
+  --red-dark: #ff9cb1;
+  --gold: #ffd46a;
+  --green: #3f9f81;
+  --amber: #c88b3b;
+  --gray: #59434e;
+  background:
+    radial-gradient(circle at 50% -12%, rgba(241,59,98,.32), transparent 34rem),
+    radial-gradient(circle at 12% 64%, rgba(89,35,86,.28), transparent 28rem),
+    linear-gradient(155deg, #08060c 0%, #170914 52%, #09070c 100%);
+  transition: background .45s ease, color .3s ease;
+}
+.theme-flandre::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .18;
+  background-image:
+    linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, #000, transparent 72%);
+}
+.theme-flandre .mist-one {
+  width: 470px; height: 470px; left: -250px; top: 9%; opacity: .7;
+  background: rgba(231,38,79,.16); box-shadow: 0 0 110px rgba(231,38,79,.2);
+}
+.theme-flandre .mist-two {
+  border-color: rgba(255,204,108,.15); background: rgba(62,19,54,.14); opacity: .8;
+}
+.theme-flandre .topbar { color: var(--ink); }
+.theme-flandre .ghost-button,
+.theme-flandre .admin-link,
+.theme-flandre .theme-toggle {
+  border-color: #5a3445; background: rgba(27,10,20,.76); color: #f6e7ed;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.025);
+}
+.theme-flandre .ghost-button:hover,
+.theme-flandre .admin-link:hover,
+.theme-flandre .theme-toggle:hover { border-color: var(--red); color: #ffb3c3; }
+.theme-flandre .theme-toggle { border-color: rgba(241,59,98,.75); }
+.theme-flandre .theme-gem {
+  background: #ffd861; box-shadow: 0 0 8px #ffbd38, 0 0 0 2px rgba(255,216,97,.12);
+}
+.theme-flandre .crest {
+  border-color: #ff5478; color: #fff0f4; background: rgba(66,9,30,.72);
+  box-shadow: 0 0 28px rgba(241,59,98,.34), inset 0 0 16px rgba(241,59,98,.16);
+}
+.theme-flandre .hero h1 {
+  color: #fff5f7; letter-spacing: .12em;
+  text-shadow: 0 2px 0 #831631, 0 0 28px rgba(241,59,98,.46);
+}
+.theme-flandre .hero .eyebrow { color: #ff829d; }
+.theme-flandre .crystal-wings {
+  position: absolute; display: block; width: min(590px, 94vw); height: 128px;
+  left: 50%; top: -12px; transform: translateX(-50%); pointer-events: none; z-index: -1;
+}
+.theme-flandre .crystal-wings::before,
+.theme-flandre .crystal-wings::after {
+  content: ""; position: absolute; top: 28px; width: 190px; height: 74px;
+  z-index: 0; border-top: 3px solid #25141f; border-radius: 50%; opacity: .92;
+}
+.theme-flandre .crystal-wings::before { left: 28px; transform: rotate(-13deg); }
+.theme-flandre .crystal-wings::after { right: 28px; transform: rotate(13deg); }
+.theme-flandre .crystal-wings i {
+  position: absolute; width: 24px; height: 34px; border-radius: 0;
+  z-index: 1;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  filter: drop-shadow(0 0 8px currentColor);
+  box-shadow: inset 4px 3px 3px rgba(255,255,255,.5), inset -4px -3px 4px rgba(0,0,0,.16);
+  animation: crystal-float 3.4s ease-in-out infinite alternate;
+}
+.theme-flandre .crystal-wings i:nth-child(1),
+.theme-flandre .crystal-wings i:nth-child(7) { top: 38px; color: #ff4f71; background: currentColor; }
+.theme-flandre .crystal-wings i:nth-child(2),
+.theme-flandre .crystal-wings i:nth-child(8) { top: 58px; color: #ffad42; background: currentColor; animation-delay: -.4s; }
+.theme-flandre .crystal-wings i:nth-child(3),
+.theme-flandre .crystal-wings i:nth-child(9) { top: 73px; color: #ffe45d; background: currentColor; animation-delay: -.8s; }
+.theme-flandre .crystal-wings i:nth-child(4),
+.theme-flandre .crystal-wings i:nth-child(10) { top: 78px; color: #66dd91; background: currentColor; animation-delay: -1.2s; }
+.theme-flandre .crystal-wings i:nth-child(5),
+.theme-flandre .crystal-wings i:nth-child(11) { top: 67px; color: #61bcff; background: currentColor; animation-delay: -1.6s; }
+.theme-flandre .crystal-wings i:nth-child(6),
+.theme-flandre .crystal-wings i:nth-child(12) { top: 45px; color: #bd7cff; background: currentColor; animation-delay: -2s; }
+.theme-flandre .crystal-wings i:nth-child(1) { left: 42px; }
+.theme-flandre .crystal-wings i:nth-child(2) { left: 76px; }
+.theme-flandre .crystal-wings i:nth-child(3) { left: 113px; }
+.theme-flandre .crystal-wings i:nth-child(4) { left: 151px; }
+.theme-flandre .crystal-wings i:nth-child(5) { left: 188px; }
+.theme-flandre .crystal-wings i:nth-child(6) { left: 218px; }
+.theme-flandre .crystal-wings i:nth-child(7) { right: 42px; }
+.theme-flandre .crystal-wings i:nth-child(8) { right: 76px; }
+.theme-flandre .crystal-wings i:nth-child(9) { right: 113px; }
+.theme-flandre .crystal-wings i:nth-child(10) { right: 151px; }
+.theme-flandre .crystal-wings i:nth-child(11) { right: 188px; }
+.theme-flandre .crystal-wings i:nth-child(12) { right: 218px; }
+@keyframes crystal-float { to { margin-top: -5px; filter: brightness(1.18); } }
+.theme-flandre .status-strip span { border-color: #4b2d3a; }
+.theme-flandre .timer-strip,
+.theme-flandre .game-card,
+.theme-flandre .timing-panel {
+  border-color: #543040; background: rgba(25,10,19,.82);
+  box-shadow: 0 18px 60px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.025);
+}
+.theme-flandre .timer-strip span + span { border-color: #4b2a38; }
+.theme-flandre .mode-switch { border: 1px solid #462433; background: #180d16; }
+.theme-flandre .mode-switch button.active {
+  background: linear-gradient(135deg, #c51f47, #f04769); box-shadow: 0 5px 20px rgba(241,59,98,.28);
+}
+.theme-flandre .autocomplete input {
+  border-color: #633648; background: #130b12; color: #fff2f5;
+}
+.theme-flandre .autocomplete input:focus { border-color: #f13b62; box-shadow: 0 0 0 3px rgba(241,59,98,.15); }
+.theme-flandre .autocomplete input::placeholder { color: #8c6d7a; }
+.theme-flandre .suggestions { border-color: #633648; background: #190d16; box-shadow: 0 14px 34px rgba(0,0,0,.4); }
+.theme-flandre .suggestions button { color: var(--ink); }
+.theme-flandre .suggestions button:hover { background: #341321; color: #ff8da5; }
+.theme-flandre .submit-button,
+.theme-flandre .again-button { background: linear-gradient(135deg, #ba173d, #f04769); box-shadow: 0 7px 22px rgba(241,59,98,.28); }
+.theme-flandre .feedback-table tbody th { background: #2a1520; }
+.theme-flandre .legend { border-color: #492b38; }
+.theme-flandre .round-history li { background: #28131e; }
+.theme-flandre .averages { border-color: #492b38; }
+.theme-flandre .help-modal { border: 1px solid #603447; background: #160c14; box-shadow: 0 28px 90px rgba(0,0,0,.6); }
+.theme-flandre .timing-panel h2,
+.theme-flandre .help-modal h2 {
+  color: #fff0f4;
+  text-shadow: 0 0 18px rgba(241,59,98,.18);
+}
+.theme-flandre footer { color: #8f6e7c; }
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-flandre .crystal-wings i { animation: none; }
+}
+
 @media (max-width: 620px) {
   .game-shell { padding: 18px 12px 30px; }
   .topbar { gap: 7px; }
   .challenge { font-size: 11px; }
-  .ghost-button, .admin-link { padding: 8px 10px; font-size: 11px; }
+  .topbar-actions { gap: 5px; }
+  .ghost-button, .admin-link, .theme-toggle { padding: 8px 9px; font-size: 11px; }
+  .theme-toggle { gap: 6px; }
+  .theme-gem { width: 7px; height: 7px; }
   .hero { margin-top: 38px; }
+  .theme-flandre .crystal-wings { width: 390px; transform: translateX(-50%) scale(.78); }
   .subtitle { letter-spacing: .08em; }
   .status-strip span { padding: 0 11px; }
   .timer-strip span { min-width: 112px; padding-inline: 13px; }
