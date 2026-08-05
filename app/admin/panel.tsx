@@ -44,7 +44,7 @@ const emptyTag: TagDraft = { name: "", kind: "exact", unit: "", active: true };
 const emptyCharacter: CharacterDraft = { name: "", aliases: "", active: true, values: {}, categories: {}, multiValues: {} };
 
 const tagKindLabels: Record<TagKind, string> = {
-  exact: "精确匹配",
+  exact: "完全匹配",
   ordered: "有序数值",
   category: "按类匹配",
   "exact-multi": "完全匹配（多标签）",
