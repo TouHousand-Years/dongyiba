@@ -50,7 +50,7 @@ export function GameBoard() {
           ? `本局已结束，答案是 ${getLocalAnswerName(catalog, nextGame)}。`
           : nextMode === "daily"
             ? "输入角色名，开始今天这一把。"
-            : "新角色已藏好，来猜吧。",
+            : "新角色已藏好。",
       );
     } catch {
       setMessage("题库尚未配置完成，请打开标签后台检查。");
@@ -124,7 +124,7 @@ export function GameBoard() {
       setQuery("");
       setAnswer("");
       setNow(Date.now());
-      setMessage("新角色已藏好，来猜吧。");
+      setMessage("新角色已藏好。");
     } catch {
       setMessage("下一轮未能开始，请重试。");
     } finally {
