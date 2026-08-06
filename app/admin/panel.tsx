@@ -1,7 +1,6 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import {
   applyCatalogMutation,
   formatMultiValueText,
@@ -208,7 +207,7 @@ export function AdminPanel() {
         </div>
         <div className="admin-actions">
           <button className="admin-reset" onClick={restoreDefaults}>恢复默认题库</button>
-          <Link href="/">返回游戏</Link>
+          <a href="../">返回游戏</a>
         </div>
       </header>
 

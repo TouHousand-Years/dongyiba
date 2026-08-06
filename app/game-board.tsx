@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
   createNextUnlimitedGame,
   createLocalGame,
@@ -179,7 +178,7 @@ export function GameBoard() {
             <span className="theme-gem" aria-hidden="true" />
             {isFlandreTheme ? "东一把" : "芙一把"}
           </button>
-          <Link className="admin-link" href="/admin">标签后台</Link>
+          <a className="admin-link" href="admin/">标签后台</a>
           <button className="ghost-button" onClick={() => setShowHelp(true)}>游戏玩法</button>
         </div>
       </header>

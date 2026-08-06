@@ -40,11 +40,12 @@ test("游戏页与后台共用本地题库，不请求远程服务", async () =>
 });
 
 test("提供无需 Node.js 和 node_modules 的 Windows 便携版", async () => {
-  const [launcher, script, packager, config] = await Promise.all([
+  const [launcher, script, packager, config, viteConfig] = await Promise.all([
     readFile(new URL("../启动东一把.cmd", import.meta.url), "utf8"),
     readFile(new URL("../scripts/start-local.ps1", import.meta.url), "utf8"),
     readFile(new URL("../scripts/build-portable.ps1", import.meta.url), "utf8"),
     readFile(new URL("../next.config.ts", import.meta.url), "utf8"),
+    readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
   ]);
   assert.match(launcher, /scripts\\start-local\.ps1/);
   assert.match(script, /http:\/\/127\.0\.0\.1:\$port\//);
@@ -56,4 +57,5 @@ test("提供无需 Node.js 和 node_modules 的 Windows 便携版", async () => 
   assert.match(packager, /VERSION\.txt/);
   assert.match(packager, /Compress-Archive/);
   assert.match(config, /output: "export"/);
+  assert.match(viteConfig, /base: isGitHubPages \? "\/dongyiba\/" : "\/"/);
 });
