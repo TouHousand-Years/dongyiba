@@ -1,6 +1,10 @@
 # 东一把
 
-一个本地猜角色网页小游戏，可自定义题库，默认为东方Project题库。
+一个猜角色网页小游戏，可自定义题库，默认为东方Project题库。
+
+## 线上版
+
+https://touhousand-years.github.io/dongyiba/
 
 ## 本地运行
 
