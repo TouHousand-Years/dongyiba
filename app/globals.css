@@ -28,6 +28,44 @@ button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 
+.catalog-update-notice {
+  position: fixed;
+  z-index: 1000;
+  top: 14px;
+  left: 50%;
+  width: min(620px, calc(100% - 24px));
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px 12px 18px;
+  border: 1px solid rgba(193, 155, 88, .7);
+  border-radius: 12px;
+  color: #fff8e9;
+  background: rgba(48, 31, 38, .96);
+  box-shadow: 0 12px 36px rgba(25, 12, 18, .28);
+}
+.catalog-update-notice div { display: grid; gap: 3px; }
+.catalog-update-notice strong { font-size: 14px; }
+.catalog-update-notice span { color: #d9ccd0; font-size: 12px; }
+.catalog-update-notice a { color: #f1ca7b; font-size: 13px; white-space: nowrap; }
+.catalog-update-notice button {
+  border: 0;
+  padding: 2px 5px;
+  color: #d9ccd0;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+}
+.catalog-update-notice button:hover { color: #fff; }
+
+@media (max-width: 520px) {
+  .catalog-update-notice { grid-template-columns: 1fr auto; gap: 8px 12px; }
+  .catalog-update-notice a { grid-column: 1; }
+  .catalog-update-notice button { grid-column: 2; grid-row: 1 / span 2; }
+}
+
 .game-shell { min-height: 100vh; position: relative; overflow: hidden; padding: 24px 20px 42px; }
 .mist { position: fixed; border-radius: 999px; filter: blur(2px); opacity: .55; pointer-events: none; }
 .mist-one { width: 380px; height: 380px; background: rgba(165,40,65,.06); top: 14%; left: -220px; }
