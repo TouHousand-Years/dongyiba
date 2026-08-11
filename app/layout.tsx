@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { CatalogUpdateNotice } from "./catalog-update-notice";
 
 const publicAssetPrefix = process.env.GITHUB_PAGES === "true" ? "/dongyiba" : "";
 
@@ -27,7 +28,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <CatalogUpdateNotice />
+        {children}
+      </body>
     </html>
   );
 }

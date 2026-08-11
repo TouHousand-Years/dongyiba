@@ -1,5 +1,7 @@
 import type { LocalCatalog } from "./local-catalog";
 
+export const defaultCatalogGitBlobSha = "91747bd09f030c203d6f8f4fe869b7ed1c7a4516";
+
 export const defaultCatalog: LocalCatalog = {
   "tags": [
     {
@@ -809,8 +811,10 @@ export const defaultCatalog: LocalCatalog = {
     },
     {
       "id": 125,
-      "name": "因幡天为",
-      "aliases": [],
+      "name": "因幡帝",
+      "aliases": [
+        "因幡天为"
+      ],
       "active": true
     },
     {
@@ -1446,10 +1450,10 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 9,
       "tagId": 3,
-      "value": "金色",
+      "value": "银/白/灰色",
       "entries": [
         {
-          "value": "金色"
+          "value": "银/白/灰色"
         }
       ]
     },
@@ -1628,12 +1632,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 11,
       "tagId": 7,
-      "value": "",
+      "value": "仙人/天人",
       "category": "神明",
       "entries": [
         {
-          "category": "神明",
-          "value": ""
+          "value": "仙人/天人",
+          "category": "神明"
         }
       ]
     },
@@ -2052,11 +2056,11 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 17,
       "tagId": 7,
-      "value": "仙人",
+      "value": "仙人/天人",
       "category": "神明",
       "entries": [
         {
-          "value": "仙人",
+          "value": "仙人/天人",
           "category": "神明"
         },
         {
@@ -2530,6 +2534,10 @@ export const defaultCatalog: LocalCatalog = {
         {
           "value": "是第3面",
           "category": "是"
+        },
+        {
+          "value": "是EX/PH面",
+          "category": "是"
         }
       ]
     },
@@ -2636,12 +2644,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 25,
       "tagId": 7,
-      "value": "妖兽",
+      "value": "",
       "category": "妖怪",
       "entries": [
         {
-          "value": "妖兽",
-          "category": "妖怪"
+          "category": "妖怪",
+          "value": ""
         }
       ]
     },
@@ -2773,8 +2781,12 @@ export const defaultCatalog: LocalCatalog = {
       "characterId": 27,
       "tagId": 6,
       "value": "",
-      "category": "命莲寺",
+      "category": "外面世界",
       "entries": [
+        {
+          "category": "外面世界",
+          "value": ""
+        },
         {
           "category": "命莲寺",
           "value": ""
@@ -2928,11 +2940,11 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 29,
       "tagId": 7,
-      "value": "仙人",
+      "value": "仙人/天人",
       "category": "神明",
       "entries": [
         {
-          "value": "仙人",
+          "value": "仙人/天人",
           "category": "神明"
         }
       ]
@@ -3348,12 +3360,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 35,
       "tagId": 7,
-      "value": "",
+      "value": "怨灵",
       "category": "妖怪",
       "entries": [
         {
-          "category": "妖怪",
-          "value": ""
+          "value": "怨灵",
+          "category": "妖怪"
         }
       ]
     },
@@ -4075,12 +4087,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 45,
       "tagId": 7,
-      "value": "",
+      "value": "半人",
       "category": "妖怪",
       "entries": [
         {
-          "category": "妖怪",
-          "value": ""
+          "value": "半人",
+          "category": "妖怪"
         }
       ]
     },
@@ -4219,11 +4231,11 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 47,
       "tagId": 7,
-      "value": "仙人",
+      "value": "仙人/天人",
       "category": "神明",
       "entries": [
         {
-          "value": "仙人",
+          "value": "仙人/天人",
           "category": "神明"
         }
       ]
@@ -4280,6 +4292,10 @@ export const defaultCatalog: LocalCatalog = {
       "entries": [
         {
           "category": "妖怪之山",
+          "value": ""
+        },
+        {
+          "category": "地底",
           "value": ""
         }
       ]
@@ -4468,6 +4484,10 @@ export const defaultCatalog: LocalCatalog = {
         },
         {
           "value": "是第6面",
+          "category": "是"
+        },
+        {
+          "value": "是EX/PH面",
           "category": "是"
         }
       ]
@@ -6000,10 +6020,10 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 73,
       "tagId": 3,
-      "value": "黑/棕色",
+      "value": "粉色",
       "entries": [
         {
-          "value": "黑/棕色"
+          "value": "粉色"
         }
       ]
     },
@@ -6276,10 +6296,10 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 77,
       "tagId": 3,
-      "value": "银色",
+      "value": "银/白/灰色",
       "entries": [
         {
-          "value": "银色"
+          "value": "银/白/灰色"
         }
       ]
     },
@@ -6401,12 +6421,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 78,
       "tagId": 7,
-      "value": "",
+      "value": "鬼",
       "category": "妖怪",
       "entries": [
         {
-          "category": "妖怪",
-          "value": ""
+          "value": "鬼",
+          "category": "妖怪"
         }
       ]
     },
@@ -6573,13 +6593,9 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 81,
       "tagId": 4,
-      "value": "是第5面",
+      "value": "是第6面",
       "category": "是",
       "entries": [
-        {
-          "value": "是第5面",
-          "category": "是"
-        },
         {
           "value": "是第6面",
           "category": "是"
@@ -7169,12 +7185,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 89,
       "tagId": 7,
-      "value": "",
+      "value": "鬼",
       "category": "妖怪",
       "entries": [
         {
-          "category": "妖怪",
-          "value": ""
+          "value": "鬼",
+          "category": "妖怪"
         }
       ]
     },
@@ -7509,24 +7525,24 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 94,
       "tagId": 6,
-      "value": "",
-      "category": "香霖堂",
+      "value": "香霖堂",
+      "category": "魔法森林",
       "entries": [
         {
-          "category": "香霖堂",
-          "value": ""
+          "value": "香霖堂",
+          "category": "魔法森林"
         }
       ]
     },
     {
       "characterId": 94,
       "tagId": 7,
-      "value": "",
+      "value": "半人",
       "category": "妖怪",
       "entries": [
         {
-          "category": "妖怪",
-          "value": ""
+          "value": "半人",
+          "category": "妖怪"
         }
       ]
     },
@@ -7667,12 +7683,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 96,
       "tagId": 7,
-      "value": "",
+      "value": "半人",
       "category": "妖怪",
       "entries": [
         {
-          "category": "妖怪",
-          "value": ""
+          "value": "半人",
+          "category": "妖怪"
         }
       ]
     },
@@ -8022,12 +8038,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 101,
       "tagId": 7,
-      "value": "",
+      "value": "魔法使",
       "category": "妖怪",
       "entries": [
         {
-          "category": "妖怪",
-          "value": ""
+          "value": "魔法使",
+          "category": "妖怪"
         }
       ]
     },
@@ -8312,6 +8328,10 @@ export const defaultCatalog: LocalCatalog = {
         {
           "value": "亡灵",
           "category": "妖怪"
+        },
+        {
+          "value": "怨灵",
+          "category": "妖怪"
         }
       ]
     },
@@ -8502,12 +8522,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 108,
       "tagId": 6,
-      "value": "妹红小屋",
+      "value": "",
       "category": "迷途竹林",
       "entries": [
         {
-          "value": "妹红小屋",
-          "category": "迷途竹林"
+          "category": "迷途竹林",
+          "value": ""
         }
       ]
     },
@@ -8641,12 +8661,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 110,
       "tagId": 6,
-      "value": "",
-      "category": "旧血池地狱",
+      "value": "旧血池地狱",
+      "category": "地底",
       "entries": [
         {
-          "category": "旧血池地狱",
-          "value": ""
+          "value": "旧血池地狱",
+          "category": "地底"
         }
       ]
     },
@@ -8767,6 +8787,10 @@ export const defaultCatalog: LocalCatalog = {
         {
           "value": "是第4面",
           "category": "是"
+        },
+        {
+          "value": "是EX/PH面",
+          "category": "是"
         }
       ]
     },
@@ -8853,12 +8877,12 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 113,
       "tagId": 6,
-      "value": "",
-      "category": "香霖堂",
+      "value": "香霖堂",
+      "category": "魔法森林",
       "entries": [
         {
-          "category": "香霖堂",
-          "value": ""
+          "value": "香霖堂",
+          "category": "魔法森林"
         },
         {
           "category": "其他/不定",
@@ -8941,11 +8965,11 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 114,
       "tagId": 7,
-      "value": "仙人",
+      "value": "仙人/天人",
       "category": "神明",
       "entries": [
         {
-          "value": "仙人",
+          "value": "仙人/天人",
           "category": "神明"
         }
       ]
@@ -9247,10 +9271,10 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 119,
       "tagId": 3,
-      "value": "黑/棕色",
+      "value": "红色",
       "entries": [
         {
-          "value": "黑/棕色"
+          "value": "红色"
         }
       ]
     },
@@ -9989,8 +10013,8 @@ export const defaultCatalog: LocalCatalog = {
           "value": ""
         },
         {
-          "category": "香霖堂",
-          "value": ""
+          "value": "香霖堂",
+          "category": "魔法森林"
         }
       ]
     },
@@ -10087,10 +10111,10 @@ export const defaultCatalog: LocalCatalog = {
     {
       "characterId": 131,
       "tagId": 3,
-      "value": "紫色",
+      "value": "黑/棕色",
       "entries": [
         {
-          "value": "紫色"
+          "value": "黑/棕色"
         }
       ]
     },

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 const sourcePath = path.resolve("db/东一把题库.csv");
 const outputPath = path.resolve("app/default-catalog.generated.ts");
@@ -160,6 +161,11 @@ function readCatalog() {
 }
 
 const catalog = readCatalog();
-const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport const defaultCatalog: LocalCatalog = ${JSON.stringify(catalog, null, 2)};\n`;
+const source = fs.readFileSync(sourcePath);
+const defaultCatalogGitBlobSha = createHash("sha1")
+  .update(`blob ${source.length}\0`)
+  .update(source)
+  .digest("hex");
+const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport const defaultCatalogGitBlobSha = ${JSON.stringify(defaultCatalogGitBlobSha)};\n\nexport const defaultCatalog: LocalCatalog = ${JSON.stringify(catalog, null, 2)};\n`;
 fs.writeFileSync(outputPath, output, "utf8");
 console.log(`defaultCatalog: ${catalog.characters.length} characters, ${catalog.tags.length} tags`);
