@@ -1,14 +1,15 @@
 import type { LocalCatalog } from "./local-catalog";
 
-export const defaultCatalogGitBlobSha = "ddbca011ecf000b41f5cdd81b2bd81484dc4257c";
-export const defaultCatalogGitCommitSha = "6a564746a236f9990fddc105a00fcef72d2298f0";
-export const defaultCatalogGitCommitDate = "2026-08-14";
+export type BundledOfficialCatalog = {
+  name: string;
+  path: string;
+  sha256: string;
+  gitCommitSha: string;
+  gitCommitDate: string;
+  catalog: LocalCatalog;
+};
 
-export const closeMatchCatalogGitBlobSha = "99c77fa8adea361100ac3c6a7bd6235167242db6";
-export const closeMatchCatalogGitCommitSha = "99c77fa8adea361100ac3c6a7bd6235167242db6";
-export const closeMatchCatalogGitCommitDate = "";
-
-export const defaultCatalog: LocalCatalog = {
+const bundledCatalog0: LocalCatalog = {
   "tags": [
     {
       "id": 1,
@@ -10461,7 +10462,7 @@ export const defaultCatalog: LocalCatalog = {
   ]
 };
 
-export const closeMatchCatalog: LocalCatalog = {
+const bundledCatalog1: LocalCatalog = {
   "tags": [
     {
       "id": 1,
@@ -18448,7 +18449,7 @@ export const closeMatchCatalog: LocalCatalog = {
     {
       "characterId": 101,
       "tagId": 2,
-      "value": "东方天空璋"
+      "value": "东方天空璋 > 东方香霖堂"
     },
     {
       "characterId": 101,
@@ -20913,3 +20914,22 @@ export const closeMatchCatalog: LocalCatalog = {
     }
   ]
 };
+
+export const bundledOfficialCatalogs: ReadonlyArray<BundledOfficialCatalog> = [
+  {
+    name: "东方新作题库（不含秘封）",
+    path: "db/东方新作题库（不含秘封）.csv",
+    sha256: "3ed845d1b5184f83f9044a4a4258b50581351a427b0cbef7caa18093bf469ec7",
+    gitCommitSha: "6ee2a02bb3c9937f151fa758a3a2caddce29703c",
+    gitCommitDate: "2026-08-15",
+    catalog: bundledCatalog0,
+  },
+  {
+    name: "东方新作题库（新版测试版）",
+    path: "db/东方新作题库（新版测试版）.csv",
+    sha256: "415fa4fd581e33b739227fa84b1199cfcd45ca72a9a5c77f0e7f52776f04cd28",
+    gitCommitSha: "6ee2a02bb3c9937f151fa758a3a2caddce29703c",
+    gitCommitDate: "2026-08-15",
+    catalog: bundledCatalog1,
+  },
+];

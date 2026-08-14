@@ -1,5 +1,5 @@
 import type { TagDefinition, TagKind, TagValueEntry } from "./game-core";
-import { closeMatchCatalog, defaultCatalog } from "./default-catalog.generated";
+import { bundledOfficialCatalogs } from "./default-catalog.generated";
 
 export type LocalTag = {
   id: number;
@@ -70,8 +70,17 @@ export type CatalogMutation =
 const CATALOG_STORAGE_KEY = "dongyiba:catalog:v1";
 const CATALOG_LIBRARY_STORAGE_KEY = "dongyiba:catalog-library:v2";
 const ACTIVE_GAMES_STORAGE_KEY = "dongyiba:games:v1";
-const DEFAULT_OFFICIAL_CATALOG_ID = "official:default";
-const CLOSE_MATCH_OFFICIAL_CATALOG_ID = "official:close-match";
+function getBundledOfficialCatalog(index: number) {
+  const source = bundledOfficialCatalogs[index];
+  if (!source) throw new Error("没有可用的内置官方题库。");
+  return source;
+}
+
+function officialCatalogId(path: string): string {
+  return `official:${encodeURIComponent(path)}`;
+}
+
+const DEFAULT_OFFICIAL_CATALOG_ID = officialCatalogId(getBundledOfficialCatalog(0).path);
 
 const REQUIRED_TAG_KINDS: Readonly<Record<string, TagKind>> = {
   "种族": "category-multi",
@@ -112,11 +121,11 @@ function createBundledCatalog(source: LocalCatalog): LocalCatalog {
 }
 
 export function createDefaultCatalog(): LocalCatalog {
-  return createBundledCatalog(defaultCatalog);
+  return createBundledCatalog(getBundledOfficialCatalog(0).catalog);
 }
 
 export function createCloseMatchCatalog(): LocalCatalog {
-  return createBundledCatalog(closeMatchCatalog);
+  return createBundledCatalog(getBundledOfficialCatalog(1).catalog);
 }
 
 function getBrowserStorage(): LocalStorageLike | null {
@@ -137,20 +146,12 @@ function cloneCatalog(catalog: LocalCatalog): LocalCatalog {
 }
 
 function createOfficialCatalogs(): CatalogRecord[] {
-  return [
-    {
-      id: DEFAULT_OFFICIAL_CATALOG_ID,
-      name: "东方新作题库（不含秘封）",
-      official: true,
-      catalog: createDefaultCatalog(),
-    },
-    {
-      id: CLOSE_MATCH_OFFICIAL_CATALOG_ID,
-      name: "东方新作题库（新版测试版）",
-      official: true,
-      catalog: createCloseMatchCatalog(),
-    },
-  ];
+  return bundledOfficialCatalogs.map((source) => ({
+    id: officialCatalogId(source.path),
+    name: source.name,
+    official: true,
+    catalog: createBundledCatalog(source.catalog),
+  }));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

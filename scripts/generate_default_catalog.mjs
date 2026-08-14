@@ -3,8 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
-const defaultSourcePath = path.resolve("db/东一把题库.csv");
-const closeMatchSourcePath = path.resolve("db/东一把题库-初登场作品完全加接近匹配.csv");
+const catalogDirectoryPath = path.resolve("db");
 const outputPath = path.resolve("app/default-catalog.generated.ts");
 const CSV_BASE_HEADERS = ["角色名", "别名", "启用"];
 const TAG_KINDS = ["exact", "exact-close", "ordered", "category", "exact-multi", "category-multi"];
@@ -181,20 +180,40 @@ function readCatalogGitVersion(sourcePath, fallbackSha) {
 function buildCatalogSource(sourcePath) {
   const catalog = readCatalog(sourcePath);
   const source = fs.readFileSync(sourcePath);
-  // Git stores text files with LF line endings. Normalize the Windows working
-  // tree's CRLF bytes so this matches the blob SHA returned by GitHub.
-  const gitBlobSource = Buffer.from(source.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
-  const blobSha = createHash("sha1")
-    .update(`blob ${gitBlobSource.length}\0`)
-    .update(gitBlobSource)
-    .digest("hex");
-  const { commitSha, commitDate } = readCatalogGitVersion(sourcePath, blobSha);
-  return { catalog, blobSha, commitSha, commitDate };
+  // GitHub raw files use LF. Normalize Windows working-tree bytes before
+  // hashing so local and remote SHA-256 values describe the same content.
+  const normalizedSource = Buffer.from(source.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
+  const sha256 = createHash("sha256").update(normalizedSource).digest("hex");
+  const { commitSha, commitDate } = readCatalogGitVersion(sourcePath, sha256);
+  return {
+    name: path.basename(sourcePath, path.extname(sourcePath)),
+    path: path.relative(process.cwd(), sourcePath).split(path.sep).join("/"),
+    sha256,
+    gitCommitSha: commitSha,
+    gitCommitDate: commitDate,
+    catalog,
+  };
 }
 
-const defaultSource = buildCatalogSource(defaultSourcePath);
-const closeMatchSource = buildCatalogSource(closeMatchSourcePath);
-const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport const defaultCatalogGitBlobSha = ${JSON.stringify(defaultSource.blobSha)};\nexport const defaultCatalogGitCommitSha = ${JSON.stringify(defaultSource.commitSha)};\nexport const defaultCatalogGitCommitDate = ${JSON.stringify(defaultSource.commitDate)};\n\nexport const closeMatchCatalogGitBlobSha = ${JSON.stringify(closeMatchSource.blobSha)};\nexport const closeMatchCatalogGitCommitSha = ${JSON.stringify(closeMatchSource.commitSha)};\nexport const closeMatchCatalogGitCommitDate = ${JSON.stringify(closeMatchSource.commitDate)};\n\nexport const defaultCatalog: LocalCatalog = ${JSON.stringify(defaultSource.catalog, null, 2)};\n\nexport const closeMatchCatalog: LocalCatalog = ${JSON.stringify(closeMatchSource.catalog, null, 2)};\n`;
+const sourcePaths = fs.readdirSync(catalogDirectoryPath, { withFileTypes: true })
+  .filter((entry) => entry.isFile() && path.extname(entry.name).toLowerCase() === ".csv")
+  .map((entry) => path.join(catalogDirectoryPath, entry.name))
+  .sort((left, right) => path.basename(left).localeCompare(path.basename(right), "zh-CN"));
+if (sourcePaths.length === 0) throw new Error(`题库目录中没有 CSV 文件：${catalogDirectoryPath}`);
+
+const catalogSources = sourcePaths.map(buildCatalogSource);
+const catalogDeclarations = catalogSources
+  .map((source, index) => `const bundledCatalog${index}: LocalCatalog = ${JSON.stringify(source.catalog, null, 2)};`)
+  .join("\n\n");
+const catalogEntries = catalogSources.map((source, index) => `  {
+    name: ${JSON.stringify(source.name)},
+    path: ${JSON.stringify(source.path)},
+    sha256: ${JSON.stringify(source.sha256)},
+    gitCommitSha: ${JSON.stringify(source.gitCommitSha)},
+    gitCommitDate: ${JSON.stringify(source.gitCommitDate)},
+    catalog: bundledCatalog${index},
+  }`).join(",\n");
+const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport type BundledOfficialCatalog = {\n  name: string;\n  path: string;\n  sha256: string;\n  gitCommitSha: string;\n  gitCommitDate: string;\n  catalog: LocalCatalog;\n};\n\n${catalogDeclarations}\n\nexport const bundledOfficialCatalogs: ReadonlyArray<BundledOfficialCatalog> = [\n${catalogEntries},\n];\n`;
 if (process.argv.includes("--check")) {
   const generated = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, "utf8") : "";
   if (generated !== output) {
@@ -204,5 +223,6 @@ if (process.argv.includes("--check")) {
 } else {
   fs.writeFileSync(outputPath, output, "utf8");
 }
-console.log(`defaultCatalog: ${defaultSource.catalog.characters.length} characters, ${defaultSource.catalog.tags.length} tags`);
-console.log(`closeMatchCatalog: ${closeMatchSource.catalog.characters.length} characters, ${closeMatchSource.catalog.tags.length} tags`);
+for (const source of catalogSources) {
+  console.log(`${source.name}: ${source.catalog.characters.length} characters, ${source.catalog.tags.length} tags, sha256 ${source.sha256}`);
+}

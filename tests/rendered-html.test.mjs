@@ -59,7 +59,7 @@ test("游戏页选择游玩题库，后台点击题库进行编辑或预览", as
   assert.doesNotMatch(panel, /<label>排序/);
   assert.match(catalog, /dongyiba:catalog:v1/);
   assert.match(catalog, /dongyiba:catalog-library:v2/);
-  assert.match(catalog, /official:default/);
+  assert.match(catalog, /official:\$\{encodeURIComponent\(path\)\}/);
   assert.match(catalog, /default-catalog\.generated/);
   assert.match(game, /submitLocalGuess/);
   assert.match(game, /dongyiba:games:v1/);
