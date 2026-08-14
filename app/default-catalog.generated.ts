@@ -1,8 +1,8 @@
 import type { LocalCatalog } from "./local-catalog";
 
-export const defaultCatalogGitBlobSha = "ff3559e29b1bce5015c05030ebfa0a2babeee6f2";
-export const defaultCatalogGitCommitSha = "7d4c1183bf18a19e402c160bd9702c7321b57b2c";
-export const defaultCatalogGitCommitDate = "2026-08-11";
+export const defaultCatalogGitBlobSha = "ddbca011ecf000b41f5cdd81b2bd81484dc4257c";
+export const defaultCatalogGitCommitSha = "6a564746a236f9990fddc105a00fcef72d2298f0";
+export const defaultCatalogGitCommitDate = "2026-08-14";
 
 export const defaultCatalog: LocalCatalog = {
   "tags": [
@@ -357,8 +357,10 @@ export const defaultCatalog: LocalCatalog = {
     },
     {
       "id": 50,
-      "name": "吉吊八千慧",
-      "aliases": [],
+      "name": "吉弔八千慧",
+      "aliases": [
+        "吉吊八千慧"
+      ],
       "active": true
     },
     {

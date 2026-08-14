@@ -188,5 +188,13 @@ const defaultCatalogGitBlobSha = createHash("sha1")
   .digest("hex");
 const { commitSha, commitDate } = readCatalogGitVersion(defaultCatalogGitBlobSha);
 const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport const defaultCatalogGitBlobSha = ${JSON.stringify(defaultCatalogGitBlobSha)};\nexport const defaultCatalogGitCommitSha = ${JSON.stringify(commitSha)};\nexport const defaultCatalogGitCommitDate = ${JSON.stringify(commitDate)};\n\nexport const defaultCatalog: LocalCatalog = ${JSON.stringify(catalog, null, 2)};\n`;
-fs.writeFileSync(outputPath, output, "utf8");
+if (process.argv.includes("--check")) {
+  const generated = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, "utf8") : "";
+  if (generated !== output) {
+    console.error("default catalog is stale; run: node scripts/generate_default_catalog.mjs");
+    process.exitCode = 1;
+  }
+} else {
+  fs.writeFileSync(outputPath, output, "utf8");
+}
 console.log(`defaultCatalog: ${catalog.characters.length} characters, ${catalog.tags.length} tags`);

@@ -14,7 +14,7 @@
     "prestart": "node scripts/generate_default_catalog.mjs",
     "start": "vinext start",
     "prelint": "node scripts/generate_default_catalog.mjs",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs && node --require ./scripts/tsx-userinfo-fallback.cjs --import tsx --test tests/game-core.test.ts tests/local-game.test.ts tests/default-catalog-update.test.ts tests/app-update.test.ts",
+    "test": "node scripts/generate_default_catalog.mjs --check && npm run build && node --test tests/rendered-html.test.mjs && node --require ./scripts/tsx-userinfo-fallback.cjs --import tsx --test tests/game-core.test.ts tests/local-game.test.ts tests/default-catalog-update.test.ts tests/app-update.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
