@@ -22,8 +22,8 @@ test("玩家首页使用真实游戏组件和正式元数据", async () => {
   assert.match(updateCenter, /手动检查/);
   assert.match(updateCenter, /checkAppVersion\(false/);
   assert.match(updateCenter, /checkCatalog\(false/);
-  assert.match(updateCenter, /默认题库有更新/);
-  assert.match(updateCenter, /当前题库.*DEFAULT_CATALOG_VERSION/);
+  assert.match(updateCenter, /官方题库有更新/);
+  assert.match(updateCenter, /当前题库基线.*DEFAULT_CATALOG_VERSION/);
   assert.match(game, /document\.documentElement\.dataset\.theme = pageTheme/);
   assert.match(styles, /html\[data-theme="flandre"\] \.update-panel/);
   assert.doesNotMatch(`${page}${layout}${game}`, /codex-preview|react-loading-skeleton/);

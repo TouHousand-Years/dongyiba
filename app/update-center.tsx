@@ -8,8 +8,8 @@ import {
 } from "./app-update";
 import {
   DEFAULT_CATALOG_VERSION,
-  DEFAULT_CATALOG_GITHUB_URL,
-  hasDefaultCatalogUpdate,
+  OFFICIAL_CATALOG_GITHUB_URL,
+  hasOfficialCatalogUpdate,
 } from "./default-catalog-update";
 
 type CheckState = "idle" | "checking" | "latest" | "available" | "error";
@@ -37,7 +37,7 @@ export function UpdateCenter() {
   async function checkCatalog(manual = false, signal?: AbortSignal) {
     if (manual) setCatalogState("checking");
     try {
-      const available = await hasDefaultCatalogUpdate((input, init) => fetch(input, { ...init, signal }));
+      const available = await hasOfficialCatalogUpdate((input, init) => fetch(input, { ...init, signal }));
       setCatalogState(available ? "available" : "latest");
       if (available) setNoticeVisible(true);
     } catch (error) {
@@ -64,7 +64,7 @@ export function UpdateCenter() {
       {showNotice && (
         <aside className="update-notice" role="alert">
           <div>
-            <strong>{hasAppUpdate && hasCatalogUpdate ? "应用和默认题库都有更新" : hasAppUpdate ? `发现新版本 V${latestVersion}` : "默认题库有更新"}</strong>
+            <strong>{hasAppUpdate && hasCatalogUpdate ? "应用和官方题库都有更新" : hasAppUpdate ? `发现新版本 V${latestVersion}` : "官方题库有更新"}</strong>
             <span>打开更新中心查看详情。</span>
           </div>
           <button type="button" className="update-notice-action" onClick={() => setPanelOpen(true)}>查看</button>
@@ -92,12 +92,12 @@ export function UpdateCenter() {
               updateUrl={APP_GITHUB_URL}
             />
             <UpdateRow
-              title="默认题库"
-              version={`当前题库 ${DEFAULT_CATALOG_VERSION}`}
+              title="官方题库"
+              version={`当前题库基线 ${DEFAULT_CATALOG_VERSION}`}
               state={catalogState}
-              availableText="GitHub 上有新版默认题库"
+              availableText="GitHub 上有新版官方题库"
               onCheck={() => void checkCatalog(true)}
-              updateUrl={DEFAULT_CATALOG_GITHUB_URL}
+              updateUrl={OFFICIAL_CATALOG_GITHUB_URL}
             />
           </section>
         </div>

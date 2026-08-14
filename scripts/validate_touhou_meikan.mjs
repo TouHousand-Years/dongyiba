@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-const filePath = "db/东一把题库.csv";
+const filePath = process.argv[2] ?? "db/东一把题库.csv";
 const source = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
 const rows = [];
 let row = [];
@@ -36,9 +36,13 @@ if (field || row.length) {
   rows.push(row);
 }
 
+const workHeader = rows[0]?.[4] ?? "";
+if (!/^初登场作品（类型：(exact|exact-close)）$/.test(workHeader)) {
+  throw new Error(`初登场作品表头类型错误：${workHeader}`);
+}
 const expectedHeaders = [
   "角色名", "别名", "启用",
-  "初登场年份（类型：ordered）", "初登场作品（类型：exact）", "发色（类型：exact-multi）",
+  "初登场年份（类型：ordered）", workHeader, "发色（类型：exact-multi）",
   "是敌人吗？（仅整数非对战新作）（类型：category-multi）", "是自机吗？（类型：category-multi）",
   "所属地点（类型：category-multi）", "种族（类型：category-multi）",
 ];
@@ -52,7 +56,7 @@ if (new Set(names).size !== names.length) throw new Error("存在重复角色名
 const roots = new Set(["人类", "妖怪", "神明"]);
 const playRoots = new Set(["是", "不是"]);
 const yearColumn = expectedHeaders.indexOf("初登场年份（类型：ordered）");
-const workColumn = expectedHeaders.indexOf("初登场作品（类型：exact）");
+const workColumn = expectedHeaders.indexOf(workHeader);
 const enemyColumn = expectedHeaders.indexOf("是敌人吗？（仅整数非对战新作）（类型：category-multi）");
 const playableColumn = expectedHeaders.indexOf("是自机吗？（类型：category-multi）");
 const locationColumn = expectedHeaders.indexOf("所属地点（类型：category-multi）");
@@ -61,6 +65,9 @@ for (const [index, item] of dataRows.entries()) {
   if (item.length !== expectedHeaders.length) throw new Error(`第 ${index + 2} 行列数不为 ${expectedHeaders.length}。`);
   if (!item[0].trim() || !item[2].trim()) throw new Error(`第 ${index + 2} 行基础字段为空。`);
   if (!item[workColumn].trim()) throw new Error(`第 ${index + 2} 行作品字段为空。`);
+  if (workHeader.endsWith("exact-close）") && !/^[^>|]+(?: > [^|]+(?: \| [^|]+)*)?$/.test(item[workColumn])) {
+    throw new Error(`第 ${index + 2} 行初登场作品完全+接近匹配格式错误：${item[workColumn]}`);
+  }
   if (!/^\d{4}$/.test(item[yearColumn])) throw new Error(`第 ${index + 2} 行初登场年份格式错误：${item[yearColumn]}`);
   if (!item[locationColumn].trim()) throw new Error(`第 ${index + 2} 行所属地点为空。`);
   if (item[locationColumn].includes("、") || item[locationColumn].split(" | ").some((area) => !area.trim())) {

@@ -1,5 +1,5 @@
 import type { TagDefinition, TagKind, TagValueEntry } from "./game-core";
-import { defaultCatalog } from "./default-catalog.generated";
+import { closeMatchCatalog, defaultCatalog } from "./default-catalog.generated";
 
 export type LocalTag = {
   id: number;
@@ -71,6 +71,7 @@ const CATALOG_STORAGE_KEY = "dongyiba:catalog:v1";
 const CATALOG_LIBRARY_STORAGE_KEY = "dongyiba:catalog-library:v2";
 const ACTIVE_GAMES_STORAGE_KEY = "dongyiba:games:v1";
 const DEFAULT_OFFICIAL_CATALOG_ID = "official:default";
+const CLOSE_MATCH_OFFICIAL_CATALOG_ID = "official:close-match";
 
 const REQUIRED_TAG_KINDS: Readonly<Record<string, TagKind>> = {
   "种族": "category-multi",
@@ -98,16 +99,24 @@ function migrateRequiredValues(tags: LocalTag[], values: LocalValue[]): LocalVal
   });
 }
 
-export function createDefaultCatalog(): LocalCatalog {
-  const tags = migrateRequiredTagKinds(defaultCatalog.tags.map((tag) => ({ ...tag })));
+function createBundledCatalog(source: LocalCatalog): LocalCatalog {
+  const tags = migrateRequiredTagKinds(source.tags.map((tag) => ({ ...tag })));
   return sortCatalog({
     tags,
-    characters: defaultCatalog.characters.map((character) => ({ ...character, aliases: [...character.aliases] })),
-    values: migrateRequiredValues(tags, defaultCatalog.values.map((item) => ({
+    characters: source.characters.map((character) => ({ ...character, aliases: [...character.aliases] })),
+    values: migrateRequiredValues(tags, source.values.map((item) => ({
       ...item,
       ...(item.entries ? { entries: item.entries.map((entry) => ({ ...entry })) } : {}),
     }))),
   });
+}
+
+export function createDefaultCatalog(): LocalCatalog {
+  return createBundledCatalog(defaultCatalog);
+}
+
+export function createCloseMatchCatalog(): LocalCatalog {
+  return createBundledCatalog(closeMatchCatalog);
 }
 
 function getBrowserStorage(): LocalStorageLike | null {
@@ -128,12 +137,20 @@ function cloneCatalog(catalog: LocalCatalog): LocalCatalog {
 }
 
 function createOfficialCatalogs(): CatalogRecord[] {
-  return [{
-    id: DEFAULT_OFFICIAL_CATALOG_ID,
-    name: "东一把官方题库",
-    official: true,
-    catalog: createDefaultCatalog(),
-  }];
+  return [
+    {
+      id: DEFAULT_OFFICIAL_CATALOG_ID,
+      name: "东方新作题库（不含秘封）",
+      official: true,
+      catalog: createDefaultCatalog(),
+    },
+    {
+      id: CLOSE_MATCH_OFFICIAL_CATALOG_ID,
+      name: "东方新作题库（新版测试版）",
+      official: true,
+      catalog: createCloseMatchCatalog(),
+    },
+  ];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

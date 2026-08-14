@@ -3,7 +3,8 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
-const sourcePath = path.resolve("db/东一把题库.csv");
+const defaultSourcePath = path.resolve("db/东一把题库.csv");
+const closeMatchSourcePath = path.resolve("db/东一把题库-初登场作品完全加接近匹配.csv");
 const outputPath = path.resolve("app/default-catalog.generated.ts");
 const CSV_BASE_HEADERS = ["角色名", "别名", "启用"];
 const TAG_KINDS = ["exact", "exact-close", "ordered", "category", "exact-multi", "category-multi"];
@@ -102,7 +103,7 @@ function parseActive(value) {
   throw new Error(`无法识别启用状态“${value}”。`);
 }
 
-function readCatalog() {
+function readCatalog(sourcePath) {
   if (!fs.existsSync(sourcePath)) {
     throw new Error(`默认题库不存在：${sourcePath}`);
   }
@@ -161,7 +162,7 @@ function readCatalog() {
   return { tags, characters, values };
 }
 
-function readCatalogGitVersion(fallbackSha) {
+function readCatalogGitVersion(sourcePath, fallbackSha) {
   try {
     const relativeSourcePath = path.relative(process.cwd(), sourcePath);
     const record = execFileSync(
@@ -177,17 +178,23 @@ function readCatalogGitVersion(fallbackSha) {
   return { commitSha: fallbackSha, commitDate: "" };
 }
 
-const catalog = readCatalog();
-const source = fs.readFileSync(sourcePath);
-// Git stores text files with LF line endings. Normalize the Windows working
-// tree's CRLF bytes so this matches the blob SHA returned by GitHub.
-const gitBlobSource = Buffer.from(source.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
-const defaultCatalogGitBlobSha = createHash("sha1")
-  .update(`blob ${gitBlobSource.length}\0`)
-  .update(gitBlobSource)
-  .digest("hex");
-const { commitSha, commitDate } = readCatalogGitVersion(defaultCatalogGitBlobSha);
-const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport const defaultCatalogGitBlobSha = ${JSON.stringify(defaultCatalogGitBlobSha)};\nexport const defaultCatalogGitCommitSha = ${JSON.stringify(commitSha)};\nexport const defaultCatalogGitCommitDate = ${JSON.stringify(commitDate)};\n\nexport const defaultCatalog: LocalCatalog = ${JSON.stringify(catalog, null, 2)};\n`;
+function buildCatalogSource(sourcePath) {
+  const catalog = readCatalog(sourcePath);
+  const source = fs.readFileSync(sourcePath);
+  // Git stores text files with LF line endings. Normalize the Windows working
+  // tree's CRLF bytes so this matches the blob SHA returned by GitHub.
+  const gitBlobSource = Buffer.from(source.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
+  const blobSha = createHash("sha1")
+    .update(`blob ${gitBlobSource.length}\0`)
+    .update(gitBlobSource)
+    .digest("hex");
+  const { commitSha, commitDate } = readCatalogGitVersion(sourcePath, blobSha);
+  return { catalog, blobSha, commitSha, commitDate };
+}
+
+const defaultSource = buildCatalogSource(defaultSourcePath);
+const closeMatchSource = buildCatalogSource(closeMatchSourcePath);
+const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport const defaultCatalogGitBlobSha = ${JSON.stringify(defaultSource.blobSha)};\nexport const defaultCatalogGitCommitSha = ${JSON.stringify(defaultSource.commitSha)};\nexport const defaultCatalogGitCommitDate = ${JSON.stringify(defaultSource.commitDate)};\n\nexport const closeMatchCatalogGitBlobSha = ${JSON.stringify(closeMatchSource.blobSha)};\nexport const closeMatchCatalogGitCommitSha = ${JSON.stringify(closeMatchSource.commitSha)};\nexport const closeMatchCatalogGitCommitDate = ${JSON.stringify(closeMatchSource.commitDate)};\n\nexport const defaultCatalog: LocalCatalog = ${JSON.stringify(defaultSource.catalog, null, 2)};\n\nexport const closeMatchCatalog: LocalCatalog = ${JSON.stringify(closeMatchSource.catalog, null, 2)};\n`;
 if (process.argv.includes("--check")) {
   const generated = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, "utf8") : "";
   if (generated !== output) {
@@ -197,4 +204,5 @@ if (process.argv.includes("--check")) {
 } else {
   fs.writeFileSync(outputPath, output, "utf8");
 }
-console.log(`defaultCatalog: ${catalog.characters.length} characters, ${catalog.tags.length} tags`);
+console.log(`defaultCatalog: ${defaultSource.catalog.characters.length} characters, ${defaultSource.catalog.tags.length} tags`);
+console.log(`closeMatchCatalog: ${closeMatchSource.catalog.characters.length} characters, ${closeMatchSource.catalog.tags.length} tags`);

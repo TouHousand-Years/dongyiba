@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   applyCatalogMutation,
   copyCatalog,
+  createCloseMatchCatalog,
   createPlayerCatalog,
   createDefaultCatalog,
   deletePlayerCatalog,
@@ -59,6 +60,14 @@ test("默认题库可以在本地存储中读写", () => {
   assert.equal(loaded.values.length, 945);
   assert.equal(loaded.tags.find((item) => item.name === "初登场年份")?.kind, "ordered");
   assert.equal(loaded.tags.find((item) => item.name === "初登场作品")?.kind, "exact");
+  const closeMatchCatalog = createCloseMatchCatalog();
+  const debutWorkTag = closeMatchCatalog.tags.find((item) => item.name === "初登场作品")!;
+  assert.equal(debutWorkTag.kind, "exact-close");
+  const reimu = closeMatchCatalog.characters.find((item) => item.name === "博丽灵梦")!;
+  assert.match(
+    closeMatchCatalog.values.find((item) => item.characterId === reimu.id && item.tagId === debutWorkTag.id)?.value ?? "",
+    /^东方灵异传 > .*东方红魔乡/,
+  );
   assert.equal(loaded.tags.find((item) => item.name === "发色")?.kind, "exact-multi");
   assert.equal(loaded.tags.find((item) => item.name === "种族")?.kind, "category-multi");
   assert.equal(loaded.tags.find((item) => item.name === "所属地点")?.kind, "category-multi");
@@ -68,8 +77,11 @@ test("默认题库可以在本地存储中读写", () => {
 test("题库集合将官方题库排在玩家题库之前并分别保存游玩与编辑选择", () => {
   const storage = new MemoryStorage();
   const initial = loadCatalogLibrary(storage);
-  assert.equal(initial.catalogs.length, 1);
-  assert.equal(initial.catalogs[0].official, true);
+  assert.equal(initial.catalogs.length, 2);
+  assert.deepEqual(initial.catalogs.map((item) => [item.name, item.official]), [
+    ["东方新作题库（不含秘封）", true],
+    ["东方新作题库（新版测试版）", true],
+  ]);
 
   const first = createPlayerCatalog("玩家甲", createDefaultCatalog(), storage);
   const second = createPlayerCatalog("玩家乙", createDefaultCatalog(), storage);
@@ -79,7 +91,8 @@ test("题库集合将官方题库排在玩家题库之前并分别保存游玩�
 
   const loaded = loadCatalogLibrary(storage);
   assert.deepEqual(loaded.catalogs.map((item) => [item.name, item.official]), [
-    ["东一把官方题库", true],
+    ["东方新作题库（不含秘封）", true],
+    ["东方新作题库（新版测试版）", true],
     ["玩家甲", false],
     ["玩家乙", false],
   ]);
@@ -109,9 +122,9 @@ test("旧版单题库存档会迁移为玩家题库", () => {
   storage.setItem("dongyiba:catalog:v1", JSON.stringify(legacy));
 
   const loaded = loadCatalogLibrary(storage);
-  assert.equal(loaded.catalogs.length, 2);
-  assert.equal(loaded.catalogs[1].name, "我的题库");
-  assert.equal(loaded.playCatalogId, loaded.catalogs[1].id);
+  assert.equal(loaded.catalogs.length, 3);
+  assert.equal(loaded.catalogs[2].name, "我的题库");
+  assert.equal(loaded.playCatalogId, loaded.catalogs[2].id);
   assert.equal(loadLocalCatalog(storage).tags.some((tag) => tag.name === "旧版标签"), true);
 });
 
