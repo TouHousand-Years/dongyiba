@@ -123,6 +123,7 @@ button { cursor: pointer; }
   border-top: 1px solid #e6dcd5;
 }
 .update-row > div:first-child { display: grid; gap: 5px; }
+.update-row-version { color: var(--ink); font: 600 11px/1.4 Arial, sans-serif; letter-spacing: .02em; }
 .update-row span { color: var(--muted); font-size: 12px; }
 .update-row span[data-state="available"] { color: var(--red); }
 .update-row span[data-state="latest"] { color: var(--green); }

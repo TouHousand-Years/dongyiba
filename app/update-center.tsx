@@ -7,6 +7,7 @@ import {
   DISPLAY_VERSION,
 } from "./app-update";
 import {
+  DEFAULT_CATALOG_VERSION,
   DEFAULT_CATALOG_GITHUB_URL,
   hasDefaultCatalogUpdate,
 } from "./default-catalog-update";
@@ -92,6 +93,7 @@ export function UpdateCenter() {
             />
             <UpdateRow
               title="默认题库"
+              version={`当前题库 ${DEFAULT_CATALOG_VERSION}`}
               state={catalogState}
               availableText="GitHub 上有新版默认题库"
               onCheck={() => void checkCatalog(true)}
@@ -106,12 +108,14 @@ export function UpdateCenter() {
 
 function UpdateRow({
   title,
+  version,
   state,
   availableText,
   onCheck,
   updateUrl,
 }: {
   title: string;
+  version?: string;
   state: CheckState;
   availableText: string;
   onCheck: () => void;
@@ -131,6 +135,7 @@ function UpdateRow({
     <div className="update-row">
       <div>
         <strong>{title}</strong>
+        {version && <small className="update-row-version">{version}</small>}
         <span data-state={state}>{statusText}</span>
       </div>
       <div className="update-row-actions">

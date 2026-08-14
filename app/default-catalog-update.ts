@@ -1,4 +1,12 @@
-import { defaultCatalogGitBlobSha } from "./default-catalog.generated";
+import {
+  defaultCatalogGitBlobSha,
+  defaultCatalogGitCommitDate,
+  defaultCatalogGitCommitSha,
+} from "./default-catalog.generated";
+
+export const DEFAULT_CATALOG_VERSION = defaultCatalogGitCommitDate
+  ? `${defaultCatalogGitCommitDate} (${defaultCatalogGitCommitSha.slice(0, 7)})`
+  : defaultCatalogGitCommitSha.slice(0, 7);
 
 export const DEFAULT_CATALOG_GITHUB_URL =
   "https://github.com/TouHousand-Years/dongyiba/blob/main/db/%E4%B8%9C%E4%B8%80%E6%8A%8A%E9%A2%98%E5%BA%93.csv";

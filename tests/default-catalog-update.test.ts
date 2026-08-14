@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { hasDefaultCatalogUpdate } from "../app/default-catalog-update";
-import { defaultCatalogGitBlobSha } from "../app/default-catalog.generated";
+import { DEFAULT_CATALOG_VERSION, hasDefaultCatalogUpdate } from "../app/default-catalog-update";
+import {
+  defaultCatalogGitBlobSha,
+  defaultCatalogGitCommitDate,
+  defaultCatalogGitCommitSha,
+} from "../app/default-catalog.generated";
 
 const bundledSha = "1".repeat(40);
 
@@ -15,6 +20,24 @@ test("内置题库 SHA 使用 Git 的 LF 文本规范化结果", () => {
     .update(bytes)
     .digest("hex");
   assert.equal(defaultCatalogGitBlobSha, expected);
+});
+
+test("题库版本来自最后一次修改题库文件的 Git 记录", () => {
+  try {
+    const record = execFileSync(
+      "git",
+      ["log", "-1", "--format=%H|%cs", "--", "db/东一把题库.csv"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    ).trim();
+    const [commitSha, commitDate] = record.split("|");
+    assert.equal(defaultCatalogGitCommitSha, commitSha);
+    assert.equal(defaultCatalogGitCommitDate, commitDate);
+    assert.equal(DEFAULT_CATALOG_VERSION, `${commitDate} (${commitSha.slice(0, 7)})`);
+  } catch {
+    assert.equal(defaultCatalogGitCommitSha, defaultCatalogGitBlobSha);
+    assert.equal(defaultCatalogGitCommitDate, "");
+    assert.equal(DEFAULT_CATALOG_VERSION, defaultCatalogGitBlobSha.slice(0, 7));
+  }
 });
 
 test("GitHub 题库 SHA 不同时报告更新", async () => {

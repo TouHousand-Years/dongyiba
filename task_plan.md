@@ -30,6 +30,12 @@
 - [x] 按 Git 文本规范化规则生成默认题库 Blob SHA
 - [x] 添加回归测试并验证
 
+### Phase 5: 显示题库 Git 版本
+**Status:** complete
+- [x] 构建时记录最后一次修改题库的提交日期与 SHA
+- [x] 在更新中心显示题库版本
+- [x] 添加测试并验证完整构建
+
 ## Decisions Made
 | Decision | Rationale |
 |---|---|
@@ -38,6 +44,8 @@
 | 以 GitHub `main/package.json` 为远端版本源 | 仓库当前没有 Releases，package.json 是现有打包版本的权威来源 |
 | 启动时并行检查应用版本和默认题库 | 用户最终澄清二者都自动检查，并要求保留原题库提醒功能 |
 | 题库 SHA 计算前将 CRLF 规范化为 LF | GitHub Blob 保存规范化后的文本；直接哈希 Windows 工作区 CRLF 会误报 |
+| 题库版本显示为 `日期 (短提交 SHA)` | 自动对应最后一次修改题库文件的 Git 记录，同时保持用户可读 |
+| Git 历史不可用时退回内容 Blob 短 SHA | 不让源码压缩包或浅克隆环境因缺少历史而无法构建 |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |

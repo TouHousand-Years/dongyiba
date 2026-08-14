@@ -1,6 +1,8 @@
 import type { LocalCatalog } from "./local-catalog";
 
 export const defaultCatalogGitBlobSha = "ff3559e29b1bce5015c05030ebfa0a2babeee6f2";
+export const defaultCatalogGitCommitSha = "7d4c1183bf18a19e402c160bd9702c7321b57b2c";
+export const defaultCatalogGitCommitDate = "2026-08-11";
 
 export const defaultCatalog: LocalCatalog = {
   "tags": [

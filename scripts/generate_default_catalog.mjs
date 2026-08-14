@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 
 const sourcePath = path.resolve("db/东一把题库.csv");
 const outputPath = path.resolve("app/default-catalog.generated.ts");
@@ -160,6 +161,22 @@ function readCatalog() {
   return { tags, characters, values };
 }
 
+function readCatalogGitVersion(fallbackSha) {
+  try {
+    const relativeSourcePath = path.relative(process.cwd(), sourcePath);
+    const record = execFileSync(
+      "git",
+      ["log", "-1", "--format=%H|%cs", "--", relativeSourcePath],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    ).trim();
+    const match = /^([0-9a-f]{40})\|(\d{4}-\d{2}-\d{2})$/i.exec(record);
+    if (match) return { commitSha: match[1].toLowerCase(), commitDate: match[2] };
+  } catch {
+    // Source archives may not contain Git history; the blob remains a stable fallback label.
+  }
+  return { commitSha: fallbackSha, commitDate: "" };
+}
+
 const catalog = readCatalog();
 const source = fs.readFileSync(sourcePath);
 // Git stores text files with LF line endings. Normalize the Windows working
@@ -169,6 +186,7 @@ const defaultCatalogGitBlobSha = createHash("sha1")
   .update(`blob ${gitBlobSource.length}\0`)
   .update(gitBlobSource)
   .digest("hex");
-const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport const defaultCatalogGitBlobSha = ${JSON.stringify(defaultCatalogGitBlobSha)};\n\nexport const defaultCatalog: LocalCatalog = ${JSON.stringify(catalog, null, 2)};\n`;
+const { commitSha, commitDate } = readCatalogGitVersion(defaultCatalogGitBlobSha);
+const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport const defaultCatalogGitBlobSha = ${JSON.stringify(defaultCatalogGitBlobSha)};\nexport const defaultCatalogGitCommitSha = ${JSON.stringify(commitSha)};\nexport const defaultCatalogGitCommitDate = ${JSON.stringify(commitDate)};\n\nexport const defaultCatalog: LocalCatalog = ${JSON.stringify(catalog, null, 2)};\n`;
 fs.writeFileSync(outputPath, output, "utf8");
 console.log(`defaultCatalog: ${catalog.characters.length} characters, ${catalog.tags.length} tags`);
