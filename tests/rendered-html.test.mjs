@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("玩家首页使用真实游戏组件和正式元数据", async () => {
-  const [page, layout, game, updateNotice] = await Promise.all([
+  const [page, layout, game, updateCenter] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/game-board.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/catalog-update-notice.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/update-center.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(page, /<GameBoard \/>/);
   assert.match(layout, /东一把｜猜东方 Project 角色/);
@@ -16,8 +16,12 @@ test("玩家首页使用真实游戏组件和正式元数据", async () => {
   assert.match(game, /无限模式/);
   assert.doesNotMatch(`${page}${layout}${game}`, /无需登录|无需联网|本地模式|本机浏览器|当前浏览器|本地离线/);
   assert.doesNotMatch(game, /fetch\(/);
-  assert.match(layout, /<CatalogUpdateNotice \/>/);
-  assert.match(updateNotice, /默认题库有更新/);
+  assert.match(layout, /<UpdateCenter \/>/);
+  assert.match(updateCenter, /当前版本/);
+  assert.match(updateCenter, /手动检查/);
+  assert.match(updateCenter, /checkAppVersion\(false/);
+  assert.match(updateCenter, /checkCatalog\(false/);
+  assert.match(updateCenter, /默认题库有更新/);
   assert.doesNotMatch(`${page}${layout}${game}`, /codex-preview|react-loading-skeleton/);
 });
 
