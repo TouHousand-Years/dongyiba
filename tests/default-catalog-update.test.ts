@@ -12,6 +12,14 @@ import {
 
 const bundledSha = "1".repeat(40);
 
+function gitBlobSha(source: string): string {
+  const bytes = Buffer.from(source, "utf8");
+  return createHash("sha1")
+    .update(`blob ${bytes.length}\0`)
+    .update(bytes)
+    .digest("hex");
+}
+
 test("内置题库 SHA 使用 Git 的 LF 文本规范化结果", () => {
   const source = readFileSync("db/东一把题库.csv", "utf8").replace(/\r\n/g, "\n");
   const bytes = Buffer.from(source, "utf8");
@@ -41,18 +49,19 @@ test("题库版本来自最后一次修改题库文件的 Git 记录", () => {
 });
 
 test("GitHub 题库 SHA 不同时报告更新", async () => {
-  const request: typeof fetch = async (_input, init) => {
+  const request: typeof fetch = async (input, init) => {
+    assert.match(String(input), /^https:\/\/raw\.githubusercontent\.com\//);
     assert.equal(init?.cache, "no-store");
-    assert.equal(new Headers(init?.headers).get("Accept"), "application/vnd.github+json");
-    return Response.json({ sha: "2".repeat(40) });
+    return new Response("remote catalog");
   };
 
   assert.equal(await hasDefaultCatalogUpdate(request, bundledSha), true);
 });
 
 test("GitHub 题库 SHA 相同时不报告更新", async () => {
-  const request: typeof fetch = async () => Response.json({ sha: bundledSha });
-  assert.equal(await hasDefaultCatalogUpdate(request, bundledSha), false);
+  const source = "same catalog";
+  const request: typeof fetch = async () => new Response(source);
+  assert.equal(await hasDefaultCatalogUpdate(request, gitBlobSha(source)), false);
 });
 
 test("GitHub 请求失败时由调用方静默处理", async () => {
