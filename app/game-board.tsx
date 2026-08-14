@@ -43,7 +43,7 @@ export function GameBoard() {
       const catalog = loadLocalCatalog();
       const restored = forceNew ? null : loadLocalGame(nextMode, catalog);
       const nextGame = restored ?? createLocalGame(catalog, nextMode);
-      if (!restored) saveLocalGame(nextGame);
+      saveLocalGame(nextGame, undefined, catalog);
       setTimingStats(nextGame.completed ? recordCompletedTiming(nextGame) : loadTimingStats());
       setGame(nextGame);
       setNow(Date.now());
@@ -103,13 +103,14 @@ export function GameBoard() {
     if (!game || !query.trim() || answer || busy) return;
     setBusy(true);
     try {
-      const result = submitLocalGuess(loadLocalCatalog(), game, query, Date.now());
+      const catalog = loadLocalCatalog();
+      const result = submitLocalGuess(catalog, game, query, Date.now());
       if (!result.ok) {
         setMessage(result.error);
         return;
       }
       setGame(result.game);
-      saveLocalGame(result.game);
+      saveLocalGame(result.game, undefined, catalog);
       if (result.game.completed) setTimingStats(recordCompletedTiming(result.game));
       setNow(Date.now());
       setQuery("");
@@ -137,8 +138,9 @@ export function GameBoard() {
     if (!game || game.mode !== "unlimited" || !game.completed) return;
     setBusy(true);
     try {
-      const nextGame = createNextUnlimitedGame(loadLocalCatalog(), game);
-      saveLocalGame(nextGame);
+      const catalog = loadLocalCatalog();
+      const nextGame = createNextUnlimitedGame(catalog, game);
+      saveLocalGame(nextGame, undefined, catalog);
       setGame(nextGame);
       setQuery("");
       setAnswer("");

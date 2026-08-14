@@ -11,6 +11,7 @@ import {
   createLocalGame,
   createNextUnlimitedGame,
   getElapsedMs,
+  loadGameRecords,
   loadLocalGame,
   loadTimingStats,
   recordCompletedTiming,
@@ -133,6 +134,7 @@ test("计时在第一次有效猜测后开始，并在猜中时冻结", () => {
   assert.equal(first.ok, true);
   if (!first.ok) return;
   assert.equal(first.guess.guessedAt, 1_000);
+  assert.equal(first.guess.elapsedMs, 0);
   assert.equal(first.game.timerStartedAt, 1_000);
   assert.equal(first.game.elapsedMs, 0);
   assert.equal(getElapsedMs(first.game, 3_500), 2_500);
@@ -141,6 +143,7 @@ test("计时在第一次有效猜测后开始，并在猜中时冻结", () => {
   assert.equal(won.ok, true);
   if (!won.ok) return;
   assert.equal(won.guess.guessedAt, 4_000);
+  assert.equal(won.guess.elapsedMs, 3_000);
   assert.equal(won.game.completed, true);
   assert.equal(won.game.won, true);
   assert.equal(won.game.timerStartedAt, null);
@@ -168,12 +171,85 @@ test("每次猜测及其时间会以不可直接读取的格式保存到本地",
   assert.equal(restored?.guesses.length, 1);
   assert.equal(restored?.guesses[0].name, guessed.name);
   assert.equal(restored?.guesses[0].guessedAt, 1_725_000_000_123);
+  assert.equal(restored?.guesses[0].elapsedMs, 0);
+});
+
+test("完整日志实时更新并可复现包含目标角色的失败局", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  let game = createLocalGame(catalog, "unlimited", 500);
+  const answer = catalog.characters.find((item) => item.id === game.answerCharacterId)!;
+  const wrongCharacters = catalog.characters
+    .filter((item) => item.active && item.id !== answer.id)
+    .slice(0, game.maxAttempts);
+
+  saveLocalGame(game, storage, catalog);
+  assert.equal(loadGameRecords(storage).length, 1);
+  assert.equal(loadGameRecords(storage)[0].guesses.length, 0);
+
+  for (const [index, character] of wrongCharacters.entries()) {
+    const result = submitLocalGuess(catalog, game, character.name, (index + 1) * 1_000);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    game = result.game;
+    saveLocalGame(game, storage, catalog);
+    assert.equal(loadGameRecords(storage).length, 1);
+    assert.equal(loadGameRecords(storage)[0].guesses.length, index + 1);
+  }
+
+  const record = loadGameRecords(storage)[0];
+  assert.equal(record.sessionId, game.sessionId);
+  assert.equal(record.createdAt, 500);
+  assert.equal(record.startedAt, 1_000);
+  assert.equal(record.updatedAt, 8_000);
+  assert.equal(record.completedAt, 8_000);
+  assert.equal(record.answerCharacterId, answer.id);
+  assert.equal(record.answerName, answer.name);
+  assert.deepEqual(record.candidateNames, game.names);
+  assert.deepEqual(record.tags, game.tags);
+  assert.equal(record.completed, true);
+  assert.equal(record.won, false);
+  assert.equal(record.durationMs, 7_000);
+  assert.deepEqual(record.guesses.map((guess) => guess.guessedAt), [1_000, 2_000, 3_000, 4_000, 5_000, 6_000, 7_000, 8_000]);
+  assert.deepEqual(record.guesses.map((guess) => guess.elapsedMs), [0, 1_000, 2_000, 3_000, 4_000, 5_000, 6_000, 7_000]);
+  assert.equal(record.guesses.every((guess) => guess.feedback.length === game.tags.length), true);
+
+  const raw = storage.getItem("dongyiba:game-records:v1")!;
+  assert.match(raw, /^dyb-obf-v1:/);
+  assert.equal(raw.includes(answer.name), false);
+  assert.throws(() => JSON.parse(raw));
+});
+
+test("进入无限模式下一轮后仍保留上一局的完整日志", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  const firstGame = createLocalGame(catalog, "unlimited", 1_000);
+  const firstAnswer = catalog.characters.find((item) => item.id === firstGame.answerCharacterId)!;
+  const won = submitLocalGuess(catalog, firstGame, firstAnswer.name, 2_000);
+  assert.equal(won.ok, true);
+  if (!won.ok) return;
+  saveLocalGame(won.game, storage, catalog);
+
+  const nextGame = createNextUnlimitedGame(catalog, won.game, 3_000);
+  saveLocalGame(nextGame, storage, catalog);
+  const records = loadGameRecords(storage);
+
+  assert.equal(records.length, 2);
+  assert.deepEqual(records.map((record) => record.sessionId), [won.game.sessionId, nextGame.sessionId]);
+  assert.equal(records[0].answerName, firstAnswer.name);
+  assert.equal(records[0].guesses.length, 1);
+  assert.equal(records[0].completed, true);
+  assert.equal(records[1].guesses.length, 0);
+  assert.equal(records[1].completed, false);
+  assert.equal(records[1].unlimitedRunId, records[0].unlimitedRunId);
+  assert.equal(records[1].unlimitedRound, 2);
 });
 
 test("旧版明文游戏存档仍可读取，并在下次保存时转为混淆格式", () => {
   const catalog = createDefaultCatalog();
   const storage = new MemoryStorage();
   const game = createLocalGame(catalog, "unlimited");
+  const answer = catalog.characters.find((item) => item.id === game.answerCharacterId)!;
   const guessed = catalog.characters.find((item) => item.active && item.id !== game.answerCharacterId)!;
   const result = submitLocalGuess(catalog, game, guessed.name, 2_000);
   assert.equal(result.ok, true);
@@ -181,14 +257,20 @@ test("旧版明文游戏存档仍可读取，并在下次保存时转为混淆�
 
   const legacyGuess = { ...result.guess } as Partial<typeof result.guess>;
   delete legacyGuess.guessedAt;
+  delete legacyGuess.elapsedMs;
+  const legacyGame = { ...result.game } as Partial<typeof result.game>;
+  delete legacyGame.createdAt;
   storage.setItem("dongyiba:games:v1", JSON.stringify({
-    unlimited: { ...result.game, guesses: [legacyGuess] },
+    unlimited: { ...legacyGame, guesses: [legacyGuess] },
   }));
 
   const restored = loadLocalGame("unlimited", catalog, storage);
   assert.equal(restored?.guesses[0].guessedAt, null);
-  saveLocalGame(restored!, storage);
+  assert.equal(restored?.guesses[0].elapsedMs, null);
+  assert.equal(restored?.createdAt, null);
+  saveLocalGame(restored!, storage, catalog);
   assert.match(storage.getItem("dongyiba:games:v1")!, /^dyb-obf-v1:/);
+  assert.equal(loadGameRecords(storage)[0].answerName, answer.name);
 });
 
 test("次数用完时计时冻结并标记为失败", () => {

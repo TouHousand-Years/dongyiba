@@ -16,6 +16,10 @@
 - 题库误报根因已复现：生成文件记录的原始工作区 SHA 为 `91747bd...`，而 `git ls-tree HEAD` 与应用 Git 文本过滤后的 SHA 均为 `ff3559e...`。Windows CRLF 在 Git Blob 中被规范化为 LF，原生成器却直接哈希 CRLF 字节。
 - 当前最后一次修改 `db/东一把题库.csv` 的提交为 `7d4c1183...`，日期为 `2026-08-11`；适合显示为 `2026-08-11 (7d4c118)`。
 - GitHub Actions 默认浅克隆可能没有题库最后修改记录；部署构建需要完整历史，其他无历史环境则回退显示内容 Blob 短 SHA。
+- 当前 `saveLocalGame` 只按模式覆盖当前状态；无限模式的 `unlimitedHistory` 仅保存答案、次数、胜负和耗时，上一轮逐次猜测与时间会丢失。
+- `sessionId` 已是每局稳定且唯一的标识，适合作为独立日志 upsert 键；`LocalGuess.feedback` 与 `game.tags` 可直接构成不依赖未来题库的回放快照。
+- 为精确还原回放节奏，除已有绝对时间 `guessedAt` 外，还需在猜测事件上记录局内 `elapsedMs`；新局需记录 `createdAt`。
+- 回放日志还需快照候选名称、目标 ID/名称和标签定义；这样即使之后题库被编辑，历史局仍可按当时数据展示。
 
 ## External Sources
 - GitHub 仓库页面显示项目公开、默认分支为 `main`，且当前无 Releases 区目；版本检查将读取该分支的 `package.json`。

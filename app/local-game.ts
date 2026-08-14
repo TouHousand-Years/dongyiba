@@ -21,6 +21,7 @@ export type LocalGuess = {
   id: number;
   name: string;
   guessedAt: number | null;
+  elapsedMs: number | null;
   feedback: GuessFeedback[];
 };
 
@@ -34,6 +35,7 @@ export type UnlimitedRound = {
 
 export type LocalGame = {
   sessionId: string;
+  createdAt: number | null;
   dayKey: string;
   challengeNumber: number;
   mode: LocalGameMode;
@@ -53,6 +55,29 @@ export type LocalGame = {
   guesses: LocalGuess[];
 };
 
+export type GameRecord = {
+  schemaVersion: 1;
+  sessionId: string;
+  createdAt: number | null;
+  startedAt: number | null;
+  updatedAt: number | null;
+  completedAt: number | null;
+  dayKey: string;
+  challengeNumber: number;
+  mode: LocalGameMode;
+  maxAttempts: number;
+  unlimitedRunId: string | null;
+  unlimitedRound: number;
+  answerCharacterId: number;
+  answerName: string;
+  candidateNames: string[];
+  tags: TagDefinition[];
+  guesses: LocalGuess[];
+  completed: boolean;
+  won: boolean | null;
+  durationMs: number;
+};
+
 export type TimingStats = {
   completedSessionIds: string[];
   winDurationsMs: number[];
@@ -64,6 +89,7 @@ export type LocalGuessResult =
   | { ok: false; error: string };
 
 const GAME_STORAGE_KEY = "dongyiba:games:v1";
+const GAME_RECORDS_STORAGE_KEY = "dongyiba:game-records:v1";
 const TIMING_STORAGE_KEY = "dongyiba:timing:v1";
 const OBFUSCATED_STORAGE_PREFIX = "dyb-obf-v1:";
 const OBFUSCATION_KEY = new TextEncoder().encode("dongyiba-local-record");
@@ -125,7 +151,7 @@ function newSessionId(): string {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode): LocalGame {
+export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode, now = Date.now()): LocalGame {
   const characters = getActiveCharacters(catalog);
   const tags = getActiveTags(catalog);
   if (!characters.length || !tags.length) throw new Error("题库尚未配置完成。");
@@ -137,6 +163,7 @@ export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode): Loc
 
   return {
     sessionId: newSessionId(),
+    createdAt: now,
     dayKey: day,
     challengeNumber: challengeNumber(day),
     mode,
@@ -157,13 +184,22 @@ export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode): Loc
   };
 }
 
-function isStoredGuess(value: unknown): value is LocalGuess {
+type StoredGuess = Omit<LocalGuess, "guessedAt" | "elapsedMs"> & {
+  guessedAt?: number | null;
+  elapsedMs?: number | null;
+};
+
+function isOptionalTime(value: unknown): value is number | null | undefined {
+  return value === undefined || value === null || (
+    typeof value === "number" && Number.isFinite(value) && value >= 0
+  );
+}
+
+function isStoredGuess(value: unknown): value is StoredGuess {
   if (!value || typeof value !== "object") return false;
-  const guess = value as Partial<LocalGuess>;
+  const guess = value as Partial<StoredGuess>;
   return Number.isInteger(guess.id) && typeof guess.name === "string" &&
-    (guess.guessedAt === undefined || guess.guessedAt === null || (
-      typeof guess.guessedAt === "number" && Number.isFinite(guess.guessedAt) && guess.guessedAt >= 0
-    )) && Array.isArray(guess.feedback);
+    isOptionalTime(guess.guessedAt) && isOptionalTime(guess.elapsedMs) && Array.isArray(guess.feedback);
 }
 
 function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: LocalCatalog): LocalGame | null {
@@ -183,9 +219,16 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
   ) return null;
   if (mode === "daily" && stored.dayKey !== shanghaiDay()) return null;
 
-  const guesses = (stored.guesses as LocalGuess[]).map((guess) => ({
+  const storedGuesses = stored.guesses as StoredGuess[];
+  const firstKnownGuessAt = storedGuesses.find((guess) => guess.guessedAt !== null && guess.guessedAt !== undefined)?.guessedAt ?? null;
+  const guesses: LocalGuess[] = storedGuesses.map((guess) => ({
     ...guess,
     guessedAt: guess.guessedAt ?? null,
+    elapsedMs: guess.elapsedMs ?? (
+      guess.guessedAt !== null && guess.guessedAt !== undefined && firstKnownGuessAt !== null
+        ? Math.max(0, guess.guessedAt - firstKnownGuessAt)
+        : null
+    ),
   }));
   const answerCharacterId = Number(stored.answerCharacterId);
   const attempts = guesses.length;
@@ -209,6 +252,7 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
     : [];
   return {
     sessionId: stored.sessionId,
+    createdAt: isOptionalTime(stored.createdAt) ? (stored.createdAt ?? firstKnownGuessAt) : firstKnownGuessAt,
     dayKey: stored.dayKey,
     challengeNumber: challengeNumber(stored.dayKey),
     mode,
@@ -241,11 +285,11 @@ export function getElapsedMs(game: LocalGame, now = Date.now()): number {
   return Math.max(0, game.elapsedMs + (game.timerStartedAt === null ? 0 : now - game.timerStartedAt));
 }
 
-export function createNextUnlimitedGame(catalog: LocalCatalog, previous: LocalGame): LocalGame {
+export function createNextUnlimitedGame(catalog: LocalCatalog, previous: LocalGame, now = Date.now()): LocalGame {
   if (previous.mode !== "unlimited" || !previous.completed) {
     throw new Error("只有已结束的无限模式对局可以进入下一轮。");
   }
-  const next = createLocalGame(catalog, "unlimited");
+  const next = createLocalGame(catalog, "unlimited", now);
   const answer = getLocalAnswerName(catalog, previous);
   return {
     ...next,
@@ -333,9 +377,82 @@ export function loadLocalGame(
   }
 }
 
+function isGameRecord(value: unknown): value is GameRecord {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Partial<GameRecord>;
+  return record.schemaVersion === 1 && typeof record.sessionId === "string" &&
+    isOptionalTime(record.createdAt) && isOptionalTime(record.startedAt) &&
+    isOptionalTime(record.updatedAt) && isOptionalTime(record.completedAt) &&
+    typeof record.dayKey === "string" && Number.isInteger(record.challengeNumber) &&
+    (record.mode === "daily" || record.mode === "unlimited") && Number.isInteger(record.maxAttempts) &&
+    (record.unlimitedRunId === null || typeof record.unlimitedRunId === "string") &&
+    Number.isInteger(record.unlimitedRound) && Number.isInteger(record.answerCharacterId) &&
+    typeof record.answerName === "string" && Array.isArray(record.candidateNames) &&
+    record.candidateNames.every((name) => typeof name === "string") && Array.isArray(record.tags) &&
+    Array.isArray(record.guesses) && record.guesses.every((guess) => (
+      isStoredGuess(guess) && guess.guessedAt !== undefined && guess.elapsedMs !== undefined
+    )) && typeof record.completed === "boolean" &&
+    (record.won === null || typeof record.won === "boolean") &&
+    typeof record.durationMs === "number" && Number.isFinite(record.durationMs) && record.durationMs >= 0;
+}
+
+export function loadGameRecords(
+  storage: LocalStorageLike | null = getBrowserStorage(),
+): GameRecord[] {
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(GAME_RECORDS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = parseStoredGameData(raw) as { records?: unknown };
+    return Array.isArray(parsed?.records) ? parsed.records.filter(isGameRecord) : [];
+  } catch {
+    return [];
+  }
+}
+
+function toGameRecord(game: LocalGame, catalog: LocalCatalog): GameRecord {
+  const firstGuess = game.guesses[0];
+  const lastGuess = game.guesses.at(-1);
+  return {
+    schemaVersion: 1,
+    sessionId: game.sessionId,
+    createdAt: game.createdAt,
+    startedAt: firstGuess?.guessedAt ?? null,
+    updatedAt: lastGuess?.guessedAt ?? game.createdAt,
+    completedAt: game.completed ? (lastGuess?.guessedAt ?? null) : null,
+    dayKey: game.dayKey,
+    challengeNumber: game.challengeNumber,
+    mode: game.mode,
+    maxAttempts: game.maxAttempts,
+    unlimitedRunId: game.unlimitedRunId,
+    unlimitedRound: game.unlimitedRound,
+    answerCharacterId: game.answerCharacterId,
+    answerName: getLocalAnswerName(catalog, game),
+    candidateNames: [...game.names],
+    tags: game.tags.map((tag) => ({ ...tag })),
+    guesses: game.guesses.map((guess) => ({
+      ...guess,
+      feedback: guess.feedback.map((item) => ({ ...item })),
+    })),
+    completed: game.completed,
+    won: game.won,
+    durationMs: lastGuess?.elapsedMs ?? game.elapsedMs,
+  };
+}
+
+function saveGameRecord(game: LocalGame, catalog: LocalCatalog, storage: LocalStorageLike) {
+  const records = loadGameRecords(storage);
+  const record = toGameRecord(game, catalog);
+  const existingIndex = records.findIndex((item) => item.sessionId === game.sessionId);
+  if (existingIndex >= 0) records[existingIndex] = record;
+  else records.push(record);
+  storage.setItem(GAME_RECORDS_STORAGE_KEY, obfuscateGameData({ schemaVersion: 1, records }));
+}
+
 export function saveLocalGame(
   game: LocalGame,
   storage: LocalStorageLike | null = getBrowserStorage(),
+  catalog: LocalCatalog = loadLocalCatalog(storage),
 ) {
   if (!storage) return;
   let saved: Record<string, unknown> = {};
@@ -350,6 +467,7 @@ export function saveLocalGame(
   }
   saved[game.mode] = game;
   storage.setItem(GAME_STORAGE_KEY, obfuscateGameData(saved));
+  saveGameRecord(game, catalog, storage);
 }
 
 function findCharacter(catalog: LocalCatalog, name: string): LocalCharacter | null {
@@ -390,10 +508,15 @@ export function submitLocalGuess(
   const elapsedMs = won || lost
     ? Math.max(0, game.elapsedMs + (activeTimerStartedAt === null ? 0 : now - activeTimerStartedAt))
     : game.elapsedMs;
+  const guessElapsedMs = Math.max(
+    0,
+    game.elapsedMs + (activeTimerStartedAt === null ? 0 : now - activeTimerStartedAt),
+  );
   const guess: LocalGuess = {
     id: guessedCharacter.id,
     name: guessedCharacter.name,
     guessedAt: now,
+    elapsedMs: guessElapsedMs,
     feedback: compareGuess(game.tags, valuesFor(catalog, guessedCharacter.id), valuesFor(catalog, answer.id)),
   };
   const nextGame: LocalGame = {
