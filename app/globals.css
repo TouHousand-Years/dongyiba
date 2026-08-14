@@ -143,6 +143,36 @@ button { cursor: pointer; }
 .update-row-actions a:hover { border-color: var(--red); color: var(--red); }
 .update-row-actions button:disabled { cursor: wait; opacity: .55; }
 
+html[data-theme="flandre"] .version-badge {
+  border-color: rgba(241,59,98,.55);
+  color: #ff9cb1;
+  background: rgba(22,12,20,.94);
+  box-shadow: 0 5px 18px rgba(0,0,0,.34);
+}
+html[data-theme="flandre"] .update-backdrop { background: rgba(5,3,7,.7); }
+html[data-theme="flandre"] .update-panel {
+  --ink: #f9edf2;
+  --muted: #c6aeb9;
+  --red: #f13b62;
+  --green: #6bc6a8;
+  border-color: #603447;
+  color: var(--ink);
+  background: #160c14;
+  box-shadow: 0 28px 90px rgba(0,0,0,.6);
+}
+html[data-theme="flandre"] .update-row { border-color: #492b38; }
+html[data-theme="flandre"] .update-row-actions button,
+html[data-theme="flandre"] .update-row-actions a {
+  border-color: #633648;
+  color: var(--ink);
+  background: #21101b;
+}
+html[data-theme="flandre"] .update-row-actions button:hover,
+html[data-theme="flandre"] .update-row-actions a:hover {
+  border-color: var(--red);
+  color: #ff9cb1;
+}
+
 @media (max-width: 520px) {
   .update-notice { grid-template-columns: 1fr auto auto; gap: 8px; }
   .update-panel { padding: 24px 18px; }

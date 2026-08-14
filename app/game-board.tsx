@@ -96,6 +96,13 @@ export function GameBoard() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.dataset.theme = pageTheme;
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, [pageTheme]);
+
+  useEffect(() => {
     document.title = pageTheme === "flandre"
       ? "芙一把｜猜东方 Project 角色"
       : "东一把｜猜东方 Project 角色";

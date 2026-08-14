@@ -3,11 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("玩家首页使用真实游戏组件和正式元数据", async () => {
-  const [page, layout, game, updateCenter] = await Promise.all([
+  const [page, layout, game, updateCenter, styles] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/game-board.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/update-center.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(page, /<GameBoard \/>/);
   assert.match(layout, /东一把｜猜东方 Project 角色/);
@@ -23,6 +24,8 @@ test("玩家首页使用真实游戏组件和正式元数据", async () => {
   assert.match(updateCenter, /checkCatalog\(false/);
   assert.match(updateCenter, /默认题库有更新/);
   assert.match(updateCenter, /当前题库.*DEFAULT_CATALOG_VERSION/);
+  assert.match(game, /document\.documentElement\.dataset\.theme = pageTheme/);
+  assert.match(styles, /html\[data-theme="flandre"\] \.update-panel/);
   assert.doesNotMatch(`${page}${layout}${game}`, /codex-preview|react-loading-skeleton/);
 });
 
