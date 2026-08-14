@@ -20,6 +20,7 @@ export type LocalGameMode = "daily" | "unlimited";
 export type LocalGuess = {
   id: number;
   name: string;
+  guessedAt: number | null;
   feedback: GuessFeedback[];
 };
 
@@ -64,6 +65,30 @@ export type LocalGuessResult =
 
 const GAME_STORAGE_KEY = "dongyiba:games:v1";
 const TIMING_STORAGE_KEY = "dongyiba:timing:v1";
+const OBFUSCATED_STORAGE_PREFIX = "dyb-obf-v1:";
+const OBFUSCATION_KEY = new TextEncoder().encode("dongyiba-local-record");
+
+function obfuscateGameData(value: unknown): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    const chunk = bytes.slice(offset, offset + 0x8000);
+    const obfuscated = chunk.map((byte, index) => (
+      byte ^ OBFUSCATION_KEY[(offset + index) % OBFUSCATION_KEY.length]
+    ));
+    binary += String.fromCharCode(...obfuscated);
+  }
+  return `${OBFUSCATED_STORAGE_PREFIX}${btoa(binary)}`;
+}
+
+function parseStoredGameData(raw: string): unknown {
+  if (!raw.startsWith(OBFUSCATED_STORAGE_PREFIX)) return JSON.parse(raw);
+  const binary = atob(raw.slice(OBFUSCATED_STORAGE_PREFIX.length));
+  const bytes = Uint8Array.from(binary, (character, index) => (
+    character.charCodeAt(0) ^ OBFUSCATION_KEY[index % OBFUSCATION_KEY.length]
+  ));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
 
 function getBrowserStorage(): LocalStorageLike | null {
   if (typeof window === "undefined") return null;
@@ -135,7 +160,10 @@ export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode): Loc
 function isStoredGuess(value: unknown): value is LocalGuess {
   if (!value || typeof value !== "object") return false;
   const guess = value as Partial<LocalGuess>;
-  return Number.isInteger(guess.id) && typeof guess.name === "string" && Array.isArray(guess.feedback);
+  return Number.isInteger(guess.id) && typeof guess.name === "string" &&
+    (guess.guessedAt === undefined || guess.guessedAt === null || (
+      typeof guess.guessedAt === "number" && Number.isFinite(guess.guessedAt) && guess.guessedAt >= 0
+    )) && Array.isArray(guess.feedback);
 }
 
 function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: LocalCatalog): LocalGame | null {
@@ -155,7 +183,10 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
   ) return null;
   if (mode === "daily" && stored.dayKey !== shanghaiDay()) return null;
 
-  const guesses = stored.guesses as LocalGuess[];
+  const guesses = (stored.guesses as LocalGuess[]).map((guess) => ({
+    ...guess,
+    guessedAt: guess.guessedAt ?? null,
+  }));
   const answerCharacterId = Number(stored.answerCharacterId);
   const attempts = guesses.length;
   const completed = stored.completed === true || attempts >= 8;
@@ -293,7 +324,7 @@ export function loadLocalGame(
   try {
     const stored = storage.getItem(GAME_STORAGE_KEY);
     if (!stored) return null;
-    const parsed: unknown = JSON.parse(stored);
+    const parsed: unknown = parseStoredGameData(stored);
     if (!parsed || typeof parsed !== "object") return null;
     const saved = (parsed as Record<string, unknown>)[mode];
     return normalizeStoredGame(saved, mode, catalog);
@@ -311,14 +342,14 @@ export function saveLocalGame(
   try {
     const current = storage.getItem(GAME_STORAGE_KEY);
     if (current) {
-      const parsed: unknown = JSON.parse(current);
+      const parsed: unknown = parseStoredGameData(current);
       if (parsed && typeof parsed === "object") saved = parsed as Record<string, unknown>;
     }
   } catch {
     saved = {};
   }
   saved[game.mode] = game;
-  storage.setItem(GAME_STORAGE_KEY, JSON.stringify(saved));
+  storage.setItem(GAME_STORAGE_KEY, obfuscateGameData(saved));
 }
 
 function findCharacter(catalog: LocalCatalog, name: string): LocalCharacter | null {
@@ -362,6 +393,7 @@ export function submitLocalGuess(
   const guess: LocalGuess = {
     id: guessedCharacter.id,
     name: guessedCharacter.name,
+    guessedAt: now,
     feedback: compareGuess(game.tags, valuesFor(catalog, guessedCharacter.id), valuesFor(catalog, answer.id)),
   };
   const nextGame: LocalGame = {

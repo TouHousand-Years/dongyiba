@@ -11,8 +11,10 @@ import {
   createLocalGame,
   createNextUnlimitedGame,
   getElapsedMs,
+  loadLocalGame,
   loadTimingStats,
   recordCompletedTiming,
+  saveLocalGame,
   submitLocalGuess,
 } from "../app/local-game";
 import {
@@ -130,6 +132,7 @@ test("计时在第一次有效猜测后开始，并在猜中时冻结", () => {
   const first = submitLocalGuess(catalog, game, wrong.name, 1_000);
   assert.equal(first.ok, true);
   if (!first.ok) return;
+  assert.equal(first.guess.guessedAt, 1_000);
   assert.equal(first.game.timerStartedAt, 1_000);
   assert.equal(first.game.elapsedMs, 0);
   assert.equal(getElapsedMs(first.game, 3_500), 2_500);
@@ -137,11 +140,55 @@ test("计时在第一次有效猜测后开始，并在猜中时冻结", () => {
   const won = submitLocalGuess(catalog, first.game, answer.name, 4_000);
   assert.equal(won.ok, true);
   if (!won.ok) return;
+  assert.equal(won.guess.guessedAt, 4_000);
   assert.equal(won.game.completed, true);
   assert.equal(won.game.won, true);
   assert.equal(won.game.timerStartedAt, null);
   assert.equal(won.game.elapsedMs, 3_000);
   assert.equal(getElapsedMs(won.game, 99_000), 3_000);
+});
+
+test("每次猜测及其时间会以不可直接读取的格式保存到本地", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  const game = createLocalGame(catalog, "unlimited");
+  const guessed = catalog.characters.find((item) => item.active && item.id !== game.answerCharacterId)!;
+  const result = submitLocalGuess(catalog, game, guessed.name, 1_725_000_000_123);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+
+  saveLocalGame(result.game, storage);
+  const raw = storage.getItem("dongyiba:games:v1")!;
+  assert.match(raw, /^dyb-obf-v1:/);
+  assert.equal(raw.includes(guessed.name), false);
+  assert.equal(raw.includes(String(result.guess.guessedAt)), false);
+  assert.throws(() => JSON.parse(raw));
+
+  const restored = loadLocalGame("unlimited", catalog, storage);
+  assert.equal(restored?.guesses.length, 1);
+  assert.equal(restored?.guesses[0].name, guessed.name);
+  assert.equal(restored?.guesses[0].guessedAt, 1_725_000_000_123);
+});
+
+test("旧版明文游戏存档仍可读取，并在下次保存时转为混淆格式", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  const game = createLocalGame(catalog, "unlimited");
+  const guessed = catalog.characters.find((item) => item.active && item.id !== game.answerCharacterId)!;
+  const result = submitLocalGuess(catalog, game, guessed.name, 2_000);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+
+  const legacyGuess = { ...result.guess } as Partial<typeof result.guess>;
+  delete legacyGuess.guessedAt;
+  storage.setItem("dongyiba:games:v1", JSON.stringify({
+    unlimited: { ...result.game, guesses: [legacyGuess] },
+  }));
+
+  const restored = loadLocalGame("unlimited", catalog, storage);
+  assert.equal(restored?.guesses[0].guessedAt, null);
+  saveLocalGame(restored!, storage);
+  assert.match(storage.getItem("dongyiba:games:v1")!, /^dyb-obf-v1:/);
 });
 
 test("次数用完时计时冻结并标记为失败", () => {
