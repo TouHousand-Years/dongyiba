@@ -13,6 +13,7 @@
 - `tsconfig.json` 已启用 `resolveJsonModule`，客户端组件可以从根 `package.json` 读取单一版本号来源。
 - 全局 `layout.tsx` 当前挂载自动题库提醒组件；适合替换为全局更新中心，使游戏页和后台都能显示版本并手动检查两类更新。
 - 现有更新提醒 CSS 可扩展为应用版本通知和更新面板，无需新增依赖。
+- 题库误报根因已复现：生成文件记录的原始工作区 SHA 为 `91747bd...`，而 `git ls-tree HEAD` 与应用 Git 文本过滤后的 SHA 均为 `ff3559e...`。Windows CRLF 在 Git Blob 中被规范化为 LF，原生成器却直接哈希 CRLF 字节。
 
 ## External Sources
 - GitHub 仓库页面显示项目公开、默认分支为 `main`，且当前无 Releases 区目；版本检查将读取该分支的 `package.json`。

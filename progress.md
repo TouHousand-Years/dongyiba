@@ -23,6 +23,12 @@
 
 ## Completion
 - 三个阶段全部完成：版本显示、两类启动自动检查、两类独立手动检查、合并提醒、错误降级和验证均已落实。
+- 收到题库更新误报反馈，新增 Phase 4。
+- 已证实误报来自 CRLF/LF 差异：原始文件 Blob SHA `91747bd...`，仓库规范化 Blob SHA `ff3559e...`。
+- 修正生成器：计算 Git Blob SHA 前将 CRLF 规范化为 LF；生成 SHA 现为 `ff3559e...`，与仓库 Blob 完全一致。
+- 新增换行符规范化回归测试。
+- `npm test`：通过；静态构建成功，36 项测试全部通过。
+- 定向 ESLint、`git diff --check`：通过。
 
 ## Files Changed
 - `task_plan.md`

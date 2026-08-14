@@ -162,9 +162,12 @@ function readCatalog() {
 
 const catalog = readCatalog();
 const source = fs.readFileSync(sourcePath);
+// Git stores text files with LF line endings. Normalize the Windows working
+// tree's CRLF bytes so this matches the blob SHA returned by GitHub.
+const gitBlobSource = Buffer.from(source.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
 const defaultCatalogGitBlobSha = createHash("sha1")
-  .update(`blob ${source.length}\0`)
-  .update(source)
+  .update(`blob ${gitBlobSource.length}\0`)
+  .update(gitBlobSource)
   .digest("hex");
 const output = `import type { LocalCatalog } from "./local-catalog";\n\nexport const defaultCatalogGitBlobSha = ${JSON.stringify(defaultCatalogGitBlobSha)};\n\nexport const defaultCatalog: LocalCatalog = ${JSON.stringify(catalog, null, 2)};\n`;
 fs.writeFileSync(outputPath, output, "utf8");

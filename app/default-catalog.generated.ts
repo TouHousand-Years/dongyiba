@@ -1,6 +1,6 @@
 import type { LocalCatalog } from "./local-catalog";
 
-export const defaultCatalogGitBlobSha = "91747bd09f030c203d6f8f4fe869b7ed1c7a4516";
+export const defaultCatalogGitBlobSha = "ff3559e29b1bce5015c05030ebfa0a2babeee6f2";
 
 export const defaultCatalog: LocalCatalog = {
   "tags": [

@@ -24,6 +24,12 @@
 - [x] 运行类型检查、测试和构建
 - [x] 检查最终差异与用户可见行为
 
+### Phase 4: 修复题库更新误报
+**Status:** complete
+- [x] 复现并定位本地与 GitHub SHA 不一致原因
+- [x] 按 Git 文本规范化规则生成默认题库 Blob SHA
+- [x] 添加回归测试并验证
+
 ## Decisions Made
 | Decision | Rationale |
 |---|---|
@@ -31,6 +37,7 @@
 | 不新增依赖，除非现有代码无法安全完成 | 避免超出请求范围 |
 | 以 GitHub `main/package.json` 为远端版本源 | 仓库当前没有 Releases，package.json 是现有打包版本的权威来源 |
 | 启动时并行检查应用版本和默认题库 | 用户最终澄清二者都自动检查，并要求保留原题库提醒功能 |
+| 题库 SHA 计算前将 CRLF 规范化为 LF | GitHub Blob 保存规范化后的文本；直接哈希 Windows 工作区 CRLF 会误报 |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
