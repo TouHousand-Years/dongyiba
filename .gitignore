@@ -44,3 +44,12 @@ next-env.d.ts
 /.npm-cache/
 dev.stdout.log
 dev.stderr.log
+
+# local agent working files
+/task_plan.md
+/findings.md
+/progress.md
+
+# player-created question bank exports
+/downloads/
+/东一把题库-*.csv
