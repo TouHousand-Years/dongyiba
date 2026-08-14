@@ -4,6 +4,9 @@
 - 2026-08-14：工作区初始状态干净，当前分支为 `main`。
 
 ## Discoveries
+- 新模式需要贯穿 `TagKind`、本地存档类型校验、CSV 表头解析、默认题库生成器和后台选项；角色值仍可沿用单个 `value` 字符串，无需新增存储结构。
+- 比较入口集中在 `compareGuess`。新格式可在比较时解析：`>` 左侧为主标签，右侧按 `|` 拆为接近标签；没有 `>` 的旧“完全匹配”值自然解析为仅主标签。
+- 后台普通单值输入和 CSV 普通单值读写已经能原样保存该格式，只需让新类型走单值路径并补充输入提示。
 - 项目是 Next/Vinext 静态网页，`package.json` 当前版本仍为 `0.1.1`，需提升为 `0.1.2`。
 - README 给出的线上仓库/站点归属为 `touhousand-years/dongyiba`，GitHub Pages 地址为 `https://touhousand-years.github.io/dongyiba/`。
 - 已存在默认题库生成、更新提示和更新逻辑文件：`default-catalog.generated.ts`、`default-catalog-update.ts`、`catalog-update-notice.tsx`，应复用而非另建体系。

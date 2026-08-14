@@ -44,6 +44,7 @@ const emptyCharacter: CharacterDraft = { name: "", aliases: "", active: true, va
 
 const tagKindLabels: Record<TagKind, string> = {
   exact: "完全匹配",
+  "exact-close": "完全+接近匹配",
   ordered: "有序数值",
   category: "按类匹配",
   "exact-multi": "完全匹配（多标签）",
@@ -250,6 +251,7 @@ export function AdminPanel() {
               <select value={tagDraft.kind} onChange={(event) => setTagDraft({ ...tagDraft, kind: event.target.value as TagDraft["kind"] })}>
                 <option value="ordered">有序数值（支持接近与箭头）</option>
                 <option value="exact">完全匹配</option>
+                <option value="exact-close">完全+接近匹配</option>
                 <option value="category">按类匹配</option>
                 <option value="exact-multi">完全匹配（多标签）</option>
                 <option value="category-multi">按类匹配（多标签）</option>
@@ -314,7 +316,11 @@ export function AdminPanel() {
                       ...characterDraft,
                       values: { ...characterDraft.values, [String(tag.id)]: event.target.value },
                     })}
-                    placeholder={tag.kind === "category" ? "小类" : tag.unit ? `数值（${tag.unit}）` : "标签值"}
+                    placeholder={tag.kind === "category"
+                      ? "小类"
+                      : tag.kind === "exact-close"
+                        ? "标签1 > 标签2 | 标签3"
+                        : tag.unit ? `数值（${tag.unit}）` : "标签值"}
                   />
                   </>}
                 </label>

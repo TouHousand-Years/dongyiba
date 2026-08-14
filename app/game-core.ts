@@ -1,5 +1,5 @@
 export type MatchState = "match" | "close" | "miss";
-export type TagKind = "exact" | "ordered" | "category" | "exact-multi" | "category-multi";
+export type TagKind = "exact" | "exact-close" | "ordered" | "category" | "exact-multi" | "category-multi";
 
 export type TagValueEntry = {
   value: string;
@@ -58,6 +58,15 @@ function uniqueNames(values: string[]) {
   return values.filter((value, index) => values.findIndex((candidate) => normalizeName(candidate) === normalizeName(value)) === index);
 }
 
+function parseExactCloseValue(source: string) {
+  const separatorIndex = source.indexOf(">");
+  if (separatorIndex < 0) return { primary: source.trim(), close: [] as string[] };
+  return {
+    primary: source.slice(0, separatorIndex).trim(),
+    close: source.slice(separatorIndex + 1).split("|").map((item) => item.trim()).filter(Boolean),
+  };
+}
+
 export function compareGuess(
   tags: TagDefinition[],
   guessValues: CharacterValue[],
@@ -73,6 +82,18 @@ export function compareGuess(
     const target = answerValue?.value ?? "";
     const category = guessedValue?.category?.trim() ?? "";
     const targetCategory = answerValue?.category?.trim() ?? "";
+
+    if (tag.kind === "exact-close") {
+      const guessedLabel = parseExactCloseValue(value).primary;
+      const targetLabels = parseExactCloseValue(target);
+      if (normalizeName(guessedLabel) === normalizeName(targetLabels.primary)) {
+        return { tagId: tag.id, value: guessedLabel, state: "match" };
+      }
+      if (targetLabels.close.some((label) => normalizeName(guessedLabel) === normalizeName(label))) {
+        return { tagId: tag.id, value: guessedLabel, state: "close" };
+      }
+      return { tagId: tag.id, value: guessedLabel, state: "miss" };
+    }
 
     if (tag.kind === "category-multi") {
       const guessedEntries = entriesFor(guessedValue);

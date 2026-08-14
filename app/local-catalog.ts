@@ -116,7 +116,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isTagKind(value: unknown): value is TagKind {
-  return ["exact", "ordered", "category", "exact-multi", "category-multi"].includes(String(value));
+  return ["exact", "exact-close", "ordered", "category", "exact-multi", "category-multi"].includes(String(value));
 }
 
 export function parseMultiValueText(source: string, singleValueAsCategory = false): TagValueEntry[] {

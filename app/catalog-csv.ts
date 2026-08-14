@@ -14,8 +14,8 @@ export type CatalogCsvImportMode = "append" | "replace";
 
 export const CATEGORY_VALUE_SEPARATOR = " > ";
 
-const TAG_KINDS: readonly TagKind[] = ["exact", "ordered", "category", "exact-multi", "category-multi"];
-const TAG_HEADER_PATTERN = /^(.*)（类型：(exact|ordered|category|exact-multi|category-multi)）$/;
+const TAG_KINDS: readonly TagKind[] = ["exact", "exact-close", "ordered", "category", "exact-multi", "category-multi"];
+const TAG_HEADER_PATTERN = /^(.*)（类型：(exact|exact-close|ordered|category|exact-multi|category-multi)）$/;
 
 function formatTagHeader(tag: Pick<LocalTag, "name" | "kind">): string {
   return `${tag.name}（类型：${tag.kind}）`;

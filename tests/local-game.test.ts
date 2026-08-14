@@ -435,6 +435,38 @@ test("CSV 标签列表头必须记录类型", () => {
   );
 });
 
+test("完全+接近匹配可保存并通过 CSV 往返，且兼容无后续标签的值", () => {
+  const catalog = applyCatalogMutation(createDefaultCatalog(), {
+    action: "saveTag",
+    name: "作品系列",
+    kind: "exact-close",
+  });
+  const tag = catalog.tags.find((item) => item.name === "作品系列")!;
+  const withCharacters = applyCatalogMutation(
+    applyCatalogMutation(catalog, {
+      action: "saveCharacter",
+      name: "接近测试角色",
+      values: { [String(tag.id)]: "红魔乡 > 妖妖梦 | 永夜抄" },
+    }),
+    {
+      action: "saveCharacter",
+      name: "旧格式测试角色",
+      values: { [String(tag.id)]: "红魔乡" },
+    },
+  );
+
+  const imported = importCatalogCsv(withCharacters, parseCatalogCsv(exportCatalogCsv(withCharacters)), "replace");
+  const importedTag = imported.tags.find((item) => item.name === "作品系列")!;
+  assert.equal(importedTag.kind, "exact-close");
+  assert.deepEqual(
+    ["接近测试角色", "旧格式测试角色"].map((name) => {
+      const character = imported.characters.find((item) => item.name === name)!;
+      return imported.values.find((item) => item.characterId === character.id && item.tagId === importedTag.id)?.value;
+    }),
+    ["红魔乡 > 妖妖梦 | 永夜抄", "红魔乡"],
+  );
+});
+
 test("按类匹配标签可保存大类和小类并通过 CSV 往返", () => {
   const catalog = applyCatalogMutation(createDefaultCatalog(), {
     action: "saveTag",

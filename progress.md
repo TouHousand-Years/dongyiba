@@ -1,5 +1,15 @@
 # Progress
 
+## 2026-08-14 完全+接近匹配
+- 启动 Phase 7；采用 Stop That Shit change 边界，仅修改新匹配模式、旧格式兼容和必要测试/说明。
+- 初步定位到 `app/game-core.ts`、`app/local-catalog.ts`、`app/catalog-csv.ts`、`app/admin/panel.tsx` 及相关测试。
+- 确认无需迁移存档结构：新类型可继续使用单个字符串值，读取时即时解析主标签和后续接近标签。
+- 已实现 `exact-close` 类型、后台选项、CSV/生成器识别、比较逻辑和使用说明；定向 ESLint 与差异格式检查通过。
+- 首次定向测试 31/32 通过；唯一失败来自测试断言误收集默认题库角色空值，已将断言范围修正。
+- 修正后核心与题库定向测试 32/32 通过，TypeScript 类型检查通过。
+- `npm test` 通过：静态构建成功，全部 42 项测试通过。
+- 最终差异检查通过；已移除类型检查产生的无关 `tsconfig.tsbuildinfo` 缓存改动，Phase 7 完成。
+
 ## 2026-08-14
 - 启动实现任务。
 - 采用 Stop That Shit change 边界：只实现版本展示、自动/手动版本检查、默认题库更新及必要验证。

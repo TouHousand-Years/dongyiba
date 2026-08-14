@@ -34,6 +34,27 @@ test("相差较大的有序标签判为不符", () => {
   assert.equal(result[1].direction, "higher");
 });
 
+test("完全+接近匹配区分首标签、后续标签和不匹配", () => {
+  const tag: TagDefinition[] = [{ id: 3, name: "作品系列", kind: "exact-close", unit: "" }];
+  const answer = [{ tagId: 3, value: "红魔乡 > 妖妖梦 | 永夜抄" }];
+
+  assert.deepEqual(compareGuess(tag, [{ tagId: 3, value: "红魔乡" }], answer)[0], {
+    tagId: 3,
+    value: "红魔乡",
+    state: "match",
+  });
+  assert.equal(compareGuess(tag, [{ tagId: 3, value: "妖妖梦" }], answer)[0].state, "close");
+  assert.equal(compareGuess(tag, [{ tagId: 3, value: "风神录" }], answer)[0].state, "miss");
+});
+
+test("完全+接近匹配读取无大于号的完全匹配旧格式", () => {
+  const tag: TagDefinition[] = [{ id: 3, name: "作品系列", kind: "exact-close", unit: "" }];
+  const answer = [{ tagId: 3, value: "红魔乡" }];
+
+  assert.equal(compareGuess(tag, [{ tagId: 3, value: "红魔乡" }], answer)[0].state, "match");
+  assert.equal(compareGuess(tag, [{ tagId: 3, value: "妖妖梦" }], answer)[0].state, "miss");
+});
+
 test("按类匹配区分完全相同、同大类和不同大类", () => {
   const categoryTag: TagDefinition[] = [{ id: 3, name: "能力类型", kind: "category", unit: "" }];
   const answer = [{ tagId: 3, category: "自然操纵", value: "风" }];

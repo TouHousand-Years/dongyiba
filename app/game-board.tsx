@@ -361,7 +361,7 @@ export function GameBoard() {
             <h2 id="help-title">八次机会，找到她</h2>
             <p>输入任意候选角色。每次猜测后，标签会告诉你与答案的距离。</p>
             <div className="help-row"><i className="match" /><span><b>命中</b>：这个标签完全一致。</span></div>
-            <div className="help-row"><i className="close" /><span><b>接近</b>：数值标签相差不超过 5，或分类标签同大类但不同小类。</span></div>
+            <div className="help-row"><i className="close" /><span><b>接近</b>：数值标签相差不超过 5、分类标签同大类但不同小类，或命中“完全+接近匹配”的后续标签。</span></div>
             <div className="help-row"><i className="match" /><span><b>多标签</b>：完全匹配模式要求完整组合重合；按类模式只需大类、小类各有重合项。</span></div>
             <div className="help-row"><i className="miss" /><span><b>不符</b>：继续缩小范围。箭头提示答案更高或更低。</span></div>
           </section>

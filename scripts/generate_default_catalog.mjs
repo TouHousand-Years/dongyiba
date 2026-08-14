@@ -6,8 +6,8 @@ import { execFileSync } from "node:child_process";
 const sourcePath = path.resolve("db/东一把题库.csv");
 const outputPath = path.resolve("app/default-catalog.generated.ts");
 const CSV_BASE_HEADERS = ["角色名", "别名", "启用"];
-const TAG_KINDS = ["exact", "ordered", "category", "exact-multi", "category-multi"];
-const TAG_HEADER_PATTERN = /^(.*)（类型：(exact|ordered|category|exact-multi|category-multi)）$/;
+const TAG_KINDS = ["exact", "exact-close", "ordered", "category", "exact-multi", "category-multi"];
+const TAG_HEADER_PATTERN = /^(.*)（类型：(exact|exact-close|ordered|category|exact-multi|category-multi)）$/;
 
 function parseCsvRows(source) {
   const text = source.replace(/^\uFEFF/, "");
