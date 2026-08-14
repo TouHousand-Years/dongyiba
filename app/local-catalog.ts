@@ -30,6 +30,19 @@ export type LocalCatalog = {
   values: LocalValue[];
 };
 
+export type CatalogRecord = {
+  id: string;
+  name: string;
+  official: boolean;
+  catalog: LocalCatalog;
+};
+
+export type CatalogLibrary = {
+  catalogs: CatalogRecord[];
+  playCatalogId: string;
+  editCatalogId: string;
+};
+
 export type LocalStorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export type CatalogMutation =
@@ -55,6 +68,9 @@ export type CatalogMutation =
   | { action: "deleteCharacter"; id: number };
 
 const CATALOG_STORAGE_KEY = "dongyiba:catalog:v1";
+const CATALOG_LIBRARY_STORAGE_KEY = "dongyiba:catalog-library:v2";
+const ACTIVE_GAMES_STORAGE_KEY = "dongyiba:games:v1";
+const DEFAULT_OFFICIAL_CATALOG_ID = "official:default";
 
 const REQUIRED_TAG_KINDS: Readonly<Record<string, TagKind>> = {
   "种族": "category-multi",
@@ -109,6 +125,15 @@ function cloneCatalog(catalog: LocalCatalog): LocalCatalog {
     characters: catalog.characters.map((character) => ({ ...character, aliases: [...character.aliases] })),
     values: catalog.values.map((item) => ({ ...item, ...(item.entries ? { entries: item.entries.map((entry) => ({ ...entry })) } : {}) })),
   };
+}
+
+function createOfficialCatalogs(): CatalogRecord[] {
+  return [{
+    id: DEFAULT_OFFICIAL_CATALOG_ID,
+    name: "东一把官方题库",
+    official: true,
+    catalog: createDefaultCatalog(),
+  }];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -222,19 +247,180 @@ function sortCatalog(catalog: LocalCatalog): LocalCatalog {
 }
 
 export function loadLocalCatalog(storage: LocalStorageLike | null = getBrowserStorage()): LocalCatalog {
-  if (!storage) return createDefaultCatalog();
-  const stored = storage.getItem(CATALOG_STORAGE_KEY);
-  return stored ? (parseCatalog(stored) ?? createDefaultCatalog()) : createDefaultCatalog();
+  const library = loadCatalogLibrary(storage);
+  return cloneCatalog(library.catalogs.find((item) => item.id === library.playCatalogId)?.catalog ?? createDefaultCatalog());
 }
 
 export function saveLocalCatalog(catalog: LocalCatalog, storage: LocalStorageLike | null = getBrowserStorage()) {
-  storage?.setItem(CATALOG_STORAGE_KEY, JSON.stringify(sortCatalog(cloneCatalog(catalog))));
+  if (!storage) return;
+  const library = loadCatalogLibrary(storage);
+  const editing = library.catalogs.find((item) => item.id === library.editCatalogId);
+  if (editing && !editing.official) {
+    updatePlayerCatalog(editing.id, catalog, storage);
+    return;
+  }
+  const created = createPlayerCatalog(`${editing?.name ?? "题库"} 副本`, catalog, storage);
+  selectPlayCatalog(created.id, storage);
 }
 
 export function resetLocalCatalog(storage: LocalStorageLike | null = getBrowserStorage()): LocalCatalog {
   const catalog = createDefaultCatalog();
   saveLocalCatalog(catalog, storage);
   return catalog;
+}
+
+type StoredCatalogLibrary = {
+  players: Array<{ id: string; name: string; catalog: LocalCatalog }>;
+  playCatalogId: string;
+  editCatalogId: string;
+};
+
+function parseStoredCatalogLibrary(value: string | null): StoredCatalogLibrary | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!isRecord(parsed) || !Array.isArray(parsed.players)) return null;
+    const players = parsed.players.map((item) => {
+      if (!isRecord(item) || typeof item.id !== "string" || typeof item.name !== "string") return null;
+      const catalog = parseCatalog(JSON.stringify(item.catalog));
+      if (!catalog || !item.id.startsWith("player:") || !item.name.trim()) return null;
+      return { id: item.id, name: item.name.trim(), catalog };
+    });
+    if (players.some((item) => item === null)) return null;
+    return {
+      players: players as StoredCatalogLibrary["players"],
+      playCatalogId: typeof parsed.playCatalogId === "string" ? parsed.playCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
+      editCatalogId: typeof parsed.editCatalogId === "string" ? parsed.editCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistCatalogLibrary(library: CatalogLibrary, storage: LocalStorageLike) {
+  const validIds = new Set(library.catalogs.map((item) => item.id));
+  storage.setItem(CATALOG_LIBRARY_STORAGE_KEY, JSON.stringify({
+    players: library.catalogs
+      .filter((item) => !item.official)
+      .map((item) => ({ id: item.id, name: item.name, catalog: sortCatalog(cloneCatalog(item.catalog)) })),
+    playCatalogId: validIds.has(library.playCatalogId) ? library.playCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
+    editCatalogId: validIds.has(library.editCatalogId) ? library.editCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
+  } satisfies StoredCatalogLibrary));
+}
+
+export function loadCatalogLibrary(storage: LocalStorageLike | null = getBrowserStorage()): CatalogLibrary {
+  const officials = createOfficialCatalogs();
+  if (!storage) return { catalogs: officials, playCatalogId: DEFAULT_OFFICIAL_CATALOG_ID, editCatalogId: DEFAULT_OFFICIAL_CATALOG_ID };
+
+  let stored = parseStoredCatalogLibrary(storage.getItem(CATALOG_LIBRARY_STORAGE_KEY));
+  if (!stored) {
+    const legacy = parseCatalog(storage.getItem(CATALOG_STORAGE_KEY) ?? "");
+    stored = legacy
+      ? { players: [{ id: "player:1", name: "我的题库", catalog: legacy }], playCatalogId: "player:1", editCatalogId: "player:1" }
+      : { players: [], playCatalogId: DEFAULT_OFFICIAL_CATALOG_ID, editCatalogId: DEFAULT_OFFICIAL_CATALOG_ID };
+  }
+
+  const catalogs: CatalogRecord[] = [
+    ...officials,
+    ...stored.players.map((item) => ({ ...item, official: false, catalog: cloneCatalog(item.catalog) })),
+  ];
+  const ids = new Set(catalogs.map((item) => item.id));
+  const library = {
+    catalogs,
+    playCatalogId: ids.has(stored.playCatalogId) ? stored.playCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
+    editCatalogId: ids.has(stored.editCatalogId) ? stored.editCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
+  };
+  persistCatalogLibrary(library, storage);
+  return library;
+}
+
+function nextPlayerCatalogId(catalogs: CatalogRecord[]): string {
+  const highest = catalogs.reduce((value, item) => {
+    const match = /^player:(\d+)$/.exec(item.id);
+    return Math.max(value, match ? Number(match[1]) : 0);
+  }, 0);
+  return `player:${highest + 1}`;
+}
+
+export function createEmptyCatalog(): LocalCatalog {
+  return { tags: [], characters: [], values: [] };
+}
+
+export function createPlayerCatalog(
+  name: string,
+  catalog: LocalCatalog = createEmptyCatalog(),
+  storage: LocalStorageLike | null = getBrowserStorage(),
+): CatalogRecord {
+  const trimmedName = name.trim();
+  if (!trimmedName) throw new Error("题库名称不能为空。");
+  const library = loadCatalogLibrary(storage);
+  const record = { id: nextPlayerCatalogId(library.catalogs), name: trimmedName, official: false, catalog: sortCatalog(cloneCatalog(catalog)) };
+  library.catalogs.push(record);
+  library.editCatalogId = record.id;
+  if (storage) persistCatalogLibrary(library, storage);
+  return { ...record, catalog: cloneCatalog(record.catalog) };
+}
+
+export function copyCatalog(catalogId: string, storage: LocalStorageLike | null = getBrowserStorage()): CatalogRecord {
+  const source = loadCatalogLibrary(storage).catalogs.find((item) => item.id === catalogId);
+  if (!source) throw new Error("题库不存在。");
+  return createPlayerCatalog(`${source.name} 副本`, source.catalog, storage);
+}
+
+export function updatePlayerCatalog(
+  catalogId: string,
+  catalog: LocalCatalog,
+  storage: LocalStorageLike | null = getBrowserStorage(),
+) {
+  const library = loadCatalogLibrary(storage);
+  const record = library.catalogs.find((item) => item.id === catalogId);
+  if (!record) throw new Error("题库不存在。");
+  if (record.official) throw new Error("官方题库不能直接修改，请先创建副本。");
+  record.catalog = sortCatalog(cloneCatalog(catalog));
+  if (storage) persistCatalogLibrary(library, storage);
+}
+
+export function renamePlayerCatalog(catalogId: string, name: string, storage: LocalStorageLike | null = getBrowserStorage()) {
+  const trimmedName = name.trim();
+  if (!trimmedName) throw new Error("题库名称不能为空。");
+  const library = loadCatalogLibrary(storage);
+  const record = library.catalogs.find((item) => item.id === catalogId);
+  if (!record) throw new Error("题库不存在。");
+  if (record.official) throw new Error("官方题库不能重命名。");
+  record.name = trimmedName;
+  if (storage) persistCatalogLibrary(library, storage);
+}
+
+export function deletePlayerCatalog(catalogId: string, storage: LocalStorageLike | null = getBrowserStorage()) {
+  const library = loadCatalogLibrary(storage);
+  const record = library.catalogs.find((item) => item.id === catalogId);
+  if (!record) throw new Error("题库不存在。");
+  if (record.official) throw new Error("官方题库不能删除。");
+  library.catalogs = library.catalogs.filter((item) => item.id !== catalogId);
+  const wasPlaying = library.playCatalogId === catalogId;
+  if (wasPlaying) library.playCatalogId = DEFAULT_OFFICIAL_CATALOG_ID;
+  if (library.editCatalogId === catalogId) library.editCatalogId = DEFAULT_OFFICIAL_CATALOG_ID;
+  if (storage) {
+    persistCatalogLibrary(library, storage);
+    if (wasPlaying) storage.removeItem(ACTIVE_GAMES_STORAGE_KEY);
+  }
+}
+
+function selectCatalog(kind: "playCatalogId" | "editCatalogId", catalogId: string, storage: LocalStorageLike | null) {
+  const library = loadCatalogLibrary(storage);
+  if (!library.catalogs.some((item) => item.id === catalogId)) throw new Error("题库不存在。");
+  library[kind] = catalogId;
+  if (storage) persistCatalogLibrary(library, storage);
+}
+
+export function selectPlayCatalog(catalogId: string, storage: LocalStorageLike | null = getBrowserStorage()) {
+  const currentId = loadCatalogLibrary(storage).playCatalogId;
+  selectCatalog("playCatalogId", catalogId, storage);
+  if (storage && currentId !== catalogId) storage.removeItem(ACTIVE_GAMES_STORAGE_KEY);
+}
+
+export function selectEditCatalog(catalogId: string, storage: LocalStorageLike | null = getBrowserStorage()) {
+  selectCatalog("editCatalogId", catalogId, storage);
 }
 
 export function getActiveTags(catalog: LocalCatalog): LocalTag[] {

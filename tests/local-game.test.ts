@@ -2,9 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyCatalogMutation,
+  copyCatalog,
+  createPlayerCatalog,
   createDefaultCatalog,
+  deletePlayerCatalog,
+  loadCatalogLibrary,
   loadLocalCatalog,
+  selectEditCatalog,
+  selectPlayCatalog,
   saveLocalCatalog,
+  updatePlayerCatalog,
   type LocalCatalog,
 } from "../app/local-catalog";
 import {
@@ -56,6 +63,56 @@ test("默认题库可以在本地存储中读写", () => {
   assert.equal(loaded.tags.find((item) => item.name === "种族")?.kind, "category-multi");
   assert.equal(loaded.tags.find((item) => item.name === "所属地点")?.kind, "category-multi");
   assert.deepEqual(loaded.characters.find((item) => item.name === "驹草山如")?.aliases, ["驹草太夫"]);
+});
+
+test("题库集合将官方题库排在玩家题库之前并分别保存游玩与编辑选择", () => {
+  const storage = new MemoryStorage();
+  const initial = loadCatalogLibrary(storage);
+  assert.equal(initial.catalogs.length, 1);
+  assert.equal(initial.catalogs[0].official, true);
+
+  const first = createPlayerCatalog("玩家甲", createDefaultCatalog(), storage);
+  const second = createPlayerCatalog("玩家乙", createDefaultCatalog(), storage);
+  storage.setItem("dongyiba:games:v1", "旧的进行中游戏");
+  selectPlayCatalog(first.id, storage);
+  selectEditCatalog(second.id, storage);
+
+  const loaded = loadCatalogLibrary(storage);
+  assert.deepEqual(loaded.catalogs.map((item) => [item.name, item.official]), [
+    ["东一把官方题库", true],
+    ["玩家甲", false],
+    ["玩家乙", false],
+  ]);
+  assert.equal(loaded.playCatalogId, first.id);
+  assert.equal(loaded.editCatalogId, second.id);
+  assert.equal(storage.getItem("dongyiba:games:v1"), null);
+});
+
+test("官方题库不能删除或直接写入，编辑副本不会改变官方内容", () => {
+  const storage = new MemoryStorage();
+  const official = loadCatalogLibrary(storage).catalogs[0];
+  assert.throws(() => deletePlayerCatalog(official.id, storage), /官方题库不能删除/);
+  assert.throws(() => updatePlayerCatalog(official.id, createDefaultCatalog(), storage), /不能直接修改/);
+
+  const copied = copyCatalog(official.id, storage);
+  const changed = applyCatalogMutation(copied.catalog, { action: "saveTag", name: "副本标签" });
+  updatePlayerCatalog(copied.id, changed, storage);
+
+  const loaded = loadCatalogLibrary(storage);
+  assert.equal(loaded.catalogs[0].catalog.tags.some((tag) => tag.name === "副本标签"), false);
+  assert.equal(loaded.catalogs.find((item) => item.id === copied.id)?.catalog.tags.some((tag) => tag.name === "副本标签"), true);
+});
+
+test("旧版单题库存档会迁移为玩家题库", () => {
+  const storage = new MemoryStorage();
+  const legacy = applyCatalogMutation(createDefaultCatalog(), { action: "saveTag", name: "旧版标签" });
+  storage.setItem("dongyiba:catalog:v1", JSON.stringify(legacy));
+
+  const loaded = loadCatalogLibrary(storage);
+  assert.equal(loaded.catalogs.length, 2);
+  assert.equal(loaded.catalogs[1].name, "我的题库");
+  assert.equal(loaded.playCatalogId, loaded.catalogs[1].id);
+  assert.equal(loadLocalCatalog(storage).tags.some((tag) => tag.name === "旧版标签"), true);
 });
 
 test("旧题库载入时自动迁移种族和活动区域的匹配方式", () => {

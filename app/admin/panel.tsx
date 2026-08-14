@@ -3,10 +3,16 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyCatalogMutation,
+  copyCatalog,
+  createPlayerCatalog,
+  deletePlayerCatalog,
   formatMultiValueText,
+  loadCatalogLibrary,
   loadLocalCatalog,
-  resetLocalCatalog,
-  saveLocalCatalog,
+  renamePlayerCatalog,
+  selectEditCatalog,
+  updatePlayerCatalog,
+  type CatalogLibrary,
   type CatalogMutation,
   type LocalCatalog,
   type LocalCharacter,
@@ -56,6 +62,7 @@ function isMultiTag(kind: TagKind) {
 }
 
 export function AdminPanel() {
+  const [library, setLibrary] = useState<CatalogLibrary>({ catalogs: [], playCatalogId: "", editCatalogId: "" });
   const [catalog, setCatalog] = useState<LocalCatalog>({ tags: [], characters: [], values: [] });
   const [tagDraft, setTagDraft] = useState<TagDraft>(emptyTag);
   const [characterDraft, setCharacterDraft] = useState<CharacterDraft>(emptyCharacter);
@@ -64,12 +71,21 @@ export function AdminPanel() {
   const [search, setSearch] = useState("");
   const [csvPreview, setCsvPreview] = useState<CatalogCsvPreview | null>(null);
   const [csvFilename, setCsvFilename] = useState("");
+  const [editorMode, setEditorMode] = useState<"structured" | "csv">("structured");
+  const [csvText, setCsvText] = useState("");
+  const [showCreateCatalog, setShowCreateCatalog] = useState(false);
+  const [newCatalogName, setNewCatalogName] = useState("我的题库");
+  const [officialCopyId, setOfficialCopyId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  function refresh() {
-    const data = loadLocalCatalog();
+  function refresh(message?: string) {
+    const nextLibrary = loadCatalogLibrary();
+    const editing = nextLibrary.catalogs.find((item) => item.id === nextLibrary.editCatalogId);
+    const data = editing?.catalog ?? loadLocalCatalog();
+    setLibrary(nextLibrary);
     setCatalog(data);
-    setNotice(`题库已载入 ${data.characters.length} 位角色、${data.tags.length} 个标签。`);
+    setCsvText(exportCatalogCsv(data));
+    setNotice(message ?? `题库已载入 ${data.characters.length} 位角色、${data.tags.length} 个标签。`);
   }
 
   useEffect(() => {
@@ -82,7 +98,7 @@ export function AdminPanel() {
     setBusy(true);
     try {
       const next = applyCatalogMutation(catalog, payload);
-      saveLocalCatalog(next);
+      updatePlayerCatalog(library.editCatalogId, next);
       setCatalog(next);
       setNotice(success);
       return true;
@@ -141,13 +157,60 @@ export function AdminPanel() {
     if (saved) setCharacterDraft({ ...emptyCharacter, values: {}, categories: {}, multiValues: {} });
   }
 
-  function restoreDefaults() {
-    if (!window.confirm("恢复默认题库会覆盖当前编辑，确定继续吗？")) return;
-    const next = resetLocalCatalog();
-    setCatalog(next);
+  function resetDrafts() {
     setTagDraft({ ...emptyTag });
     setCharacterDraft({ ...emptyCharacter, values: {}, categories: {}, multiValues: {} });
-    setNotice("默认题库已恢复。");
+    setCsvPreview(null);
+    setCsvFilename("");
+    if (fileInput.current) fileInput.current.value = "";
+  }
+
+  function openCatalog(catalogId: string, official: boolean) {
+    selectEditCatalog(catalogId);
+    resetDrafts();
+    setEditorMode("structured");
+    refresh(official ? "正在预览官方题库。" : "已切换编辑题库。");
+  }
+
+  function confirmOfficialCopy() {
+    if (!officialCopyId) return;
+    const selected = copyCatalog(officialCopyId);
+    setOfficialCopyId(null);
+    resetDrafts();
+    setEditorMode("structured");
+    refresh(`已创建“${selected.name}”，正在编辑该副本。`);
+  }
+
+  function createCatalog(event: FormEvent) {
+    event.preventDefault();
+    const name = newCatalogName.trim();
+    if (!name) return;
+    createPlayerCatalog(name);
+    resetDrafts();
+    setEditorMode("structured");
+    setShowCreateCatalog(false);
+    setNewCatalogName("我的题库");
+    refresh(`已创建“${name}”。`);
+  }
+
+  function duplicate(catalogId: string) {
+    const created = copyCatalog(catalogId);
+    resetDrafts();
+    refresh(`已创建“${created.name}”。`);
+  }
+
+  function renameCatalog(catalogId: string, currentName: string) {
+    const name = window.prompt("题库名称", currentName)?.trim();
+    if (!name || name === currentName) return;
+    renamePlayerCatalog(catalogId, name);
+    refresh(`题库已重命名为“${name}”。`);
+  }
+
+  function removeCatalog(catalogId: string, name: string) {
+    if (!window.confirm(`删除题库“${name}”？此操作无法撤销。`)) return;
+    deletePlayerCatalog(catalogId);
+    resetDrafts();
+    refresh("题库已删除。");
   }
 
   async function selectCsv(event: ChangeEvent<HTMLInputElement>) {
@@ -171,7 +234,7 @@ export function AdminPanel() {
     if (mode === "replace" && !window.confirm("替换会覆盖当前全部标签和角色，确定继续吗？")) return;
     try {
       const next = importCatalogCsv(catalog, csvPreview, mode);
-      saveLocalCatalog(next);
+      updatePlayerCatalog(library.editCatalogId, next);
       setCatalog(next);
       setCsvPreview(null);
       setCsvFilename("");
@@ -193,6 +256,27 @@ export function AdminPanel() {
     setNotice(`已导出 ${catalog.characters.length} 位角色的 CSV 文件。`);
   }
 
+  function saveCsvText() {
+    try {
+      const preview = parseCatalogCsv(csvText);
+      const next = importCatalogCsv(catalog, preview, "replace");
+      updatePlayerCatalog(library.editCatalogId, next);
+      setCatalog(next);
+      setCsvText(exportCatalogCsv(next));
+      setNotice(`CSV 文档已保存，共 ${next.characters.length} 位角色、${next.tags.length} 个标签。`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "CSV 文档保存失败。");
+    }
+  }
+
+  const editingCatalog = library.catalogs.find((item) => item.id === library.editCatalogId);
+  const officialTable = useMemo(
+    () => editingCatalog?.official
+      ? parseCatalogCsv(exportCatalogCsv(editingCatalog.catalog))
+      : null,
+    [editingCatalog],
+  );
+
   const filtered = useMemo(
     () => catalog.characters.filter((item) => item.name.includes(search.trim())),
     [catalog.characters, search],
@@ -207,12 +291,100 @@ export function AdminPanel() {
           <p>维护角色、别名和每一列判定标签。</p>
         </div>
         <div className="admin-actions">
-          <button className="admin-reset" onClick={restoreDefaults}>恢复默认题库</button>
           <a href="../">返回游戏</a>
         </div>
       </header>
 
       <p className="admin-notice" role="status">{notice}</p>
+
+      <section className="admin-card catalog-manager">
+        <div className="section-title">
+          <div><span>LIB</span><h2>题库管理</h2></div>
+          <button className="admin-primary" onClick={() => setShowCreateCatalog(true)}>＋ 新建题库</button>
+        </div>
+        <p className="admin-hint">点击玩家题库即可编辑；点击官方题库可先预览内容。</p>
+        <div className="catalog-list">
+          {library.catalogs.map((item) => (
+            <article
+              className={`${item.official ? "official" : "player"} ${library.editCatalogId === item.id ? "selected" : ""}`}
+              key={item.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => openCatalog(item.id, item.official)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openCatalog(item.id, item.official);
+                }
+              }}
+            >
+              <div>
+                <span className="catalog-source">{item.official ? "官方" : "玩家"}</span>
+                <h3>{item.name}</h3>
+                <p>{item.catalog.characters.length} 位角色 · {item.catalog.tags.length} 个标签</p>
+              </div>
+              <div className="catalog-badges">
+                {library.editCatalogId === item.id && <b>{item.official ? "预览中" : "编辑中"}</b>}
+              </div>
+              <div className="catalog-actions">
+                <button onClick={(event) => { event.stopPropagation(); duplicate(item.id); }}>复制</button>
+                {!item.official && <button onClick={(event) => { event.stopPropagation(); renameCatalog(item.id, item.name); }}>重命名</button>}
+                {!item.official && <button className="danger" onClick={(event) => { event.stopPropagation(); removeCatalog(item.id, item.name); }}>删除</button>}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {editingCatalog?.official ? (
+        <section className="admin-card official-readonly">
+          <div className="section-title">
+            <div><span>VIEW</span><h2>预览：{editingCatalog.name}</h2></div>
+            <button className="admin-primary" onClick={() => setOfficialCopyId(editingCatalog.id)}>创建副本并编辑</button>
+          </div>
+          <p>官方题库为只读，编辑时会创建玩家副本。</p>
+          {officialTable && (
+            <div className="official-csv-table-wrap">
+              <table className="official-csv-table">
+                <caption>{editingCatalog.name} · {officialTable.rows.length} 位角色</caption>
+                <thead>
+                  <tr>{officialTable.headers.map((header) => <th key={header} scope="col">{header}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {officialTable.rows.map((row) => (
+                    <tr key={row[0]}>
+                      {row.map((cell, index) => index === 0
+                        ? <th key={officialTable.headers[index]} scope="row">{cell}</th>
+                        : <td key={officialTable.headers[index]}>{cell}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : editingCatalog ? <>
+
+      <section className="admin-card editor-heading">
+        <div className="section-title">
+          <div><span>EDIT</span><h2>编辑：{editingCatalog.name}</h2></div>
+          <div className="editor-mode-switch" aria-label="题库编辑模式">
+            <button className={editorMode === "structured" ? "active" : ""} onClick={() => setEditorMode("structured")}>表单编辑</button>
+            <button className={editorMode === "csv" ? "active" : ""} onClick={() => { setCsvText(exportCatalogCsv(catalog)); setEditorMode("csv"); }}>CSV 文档</button>
+          </div>
+        </div>
+      </section>
+
+      {editorMode === "csv" ? (
+        <section className="admin-card csv-document-card">
+          <p className="admin-hint">直接编辑完整 CSV；保存时会校验表头、标签类型和角色数据。</p>
+          <textarea aria-label="CSV 文档内容" value={csvText} onChange={(event) => setCsvText(event.target.value)} spellCheck={false} />
+          <div className="csv-document-actions">
+            <button onClick={() => setCsvText(exportCatalogCsv(catalog))}>放弃文本修改</button>
+            <button className="admin-primary" onClick={saveCsvText}>保存 CSV 文档</button>
+          </div>
+        </section>
+      ) : <>
 
       <section className="admin-card csv-card">
         <div className="section-title">
@@ -351,6 +523,48 @@ export function AdminPanel() {
           ))}
         </div>
       </section>
+      </>}
+      </> : null}
+
+      {showCreateCatalog && (
+        <div className="modal-backdrop" onClick={() => setShowCreateCatalog(false)}>
+          <section className="help-modal catalog-create-modal" role="dialog" aria-modal="true" aria-labelledby="create-catalog-title" onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" aria-label="关闭" onClick={() => setShowCreateCatalog(false)}>×</button>
+            <p className="eyebrow">New archive</p>
+            <h2 id="create-catalog-title">新建题库</h2>
+            <p>为新题库取一个容易辨认的名字，创建后会直接进入编辑。</p>
+            <form onSubmit={createCatalog}>
+              <label htmlFor="new-catalog-name">题库名称</label>
+              <input
+                id="new-catalog-name"
+                value={newCatalogName}
+                onChange={(event) => setNewCatalogName(event.target.value)}
+                autoFocus
+                required
+              />
+              <div>
+                <button type="button" onClick={() => setShowCreateCatalog(false)}>取消</button>
+                <button className="admin-primary" disabled={!newCatalogName.trim()}>创建题库</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {officialCopyId && (
+        <div className="modal-backdrop" onClick={() => setOfficialCopyId(null)}>
+          <section className="help-modal catalog-copy-modal" role="dialog" aria-modal="true" aria-labelledby="copy-official-title" onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" aria-label="关闭" onClick={() => setOfficialCopyId(null)}>×</button>
+            <p className="eyebrow">Official archive</p>
+            <h2 id="copy-official-title">创建副本后编辑？</h2>
+            <p>官方题库不能直接修改。继续后将创建一个玩家副本，之后的修改只会保存到副本中。</p>
+            <div className="catalog-modal-actions">
+              <button onClick={() => setOfficialCopyId(null)}>取消</button>
+              <button className="admin-primary" onClick={confirmOfficialCopy}>创建副本并编辑</button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

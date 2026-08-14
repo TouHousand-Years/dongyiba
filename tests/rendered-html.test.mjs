@@ -26,24 +26,48 @@ test("玩家首页使用真实游戏组件和正式元数据", async () => {
   assert.doesNotMatch(`${page}${layout}${game}`, /codex-preview|react-loading-skeleton/);
 });
 
-test("游戏页与后台共用本地题库，不请求远程服务", async () => {
-  const [panel, catalog, game] = await Promise.all([
+test("游戏页选择游玩题库，后台点击题库进行编辑或预览", async () => {
+  const [panel, catalog, game, gameBoard] = await Promise.all([
     readFile(new URL("../app/admin/panel.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/local-catalog.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/local-game.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/game-board.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(panel, /saveLocalCatalog/);
-  assert.match(panel, /恢复默认题库/);
+  assert.match(panel, /loadCatalogLibrary/);
+  assert.match(panel, /role="button"/);
+  assert.match(panel, /openCatalog\(item\.id, item\.official\)/);
+  assert.match(panel, /预览：/);
+  assert.match(panel, /official-csv-table/);
+  assert.match(panel, /officialTable\.headers\.map/);
+  assert.match(panel, /officialTable\.rows\.map/);
+  assert.match(panel, /copy-official-title/);
+  assert.match(panel, /官方题库不能直接修改/);
+  assert.match(panel, /新建题库/);
+  assert.match(panel, /role="dialog"/);
+  assert.match(panel, /aria-labelledby="create-catalog-title"/);
+  assert.match(panel, /htmlFor="new-catalog-name"/);
+  assert.match(panel, /创建题库/);
+  assert.match(panel, /CSV 文档/);
+  assert.match(panel, /保存 CSV 文档/);
   assert.match(panel, /添加到当前题库/);
   assert.match(panel, /替换当前题库/);
   assert.match(panel, /导出当前题库/);
   assert.match(panel, /标签按名称首字自动排序/);
   assert.doesNotMatch(panel, /<label>排序/);
   assert.match(catalog, /dongyiba:catalog:v1/);
+  assert.match(catalog, /dongyiba:catalog-library:v2/);
+  assert.match(catalog, /official:default/);
   assert.match(catalog, /default-catalog\.generated/);
   assert.match(game, /submitLocalGuess/);
   assert.match(game, /dongyiba:games:v1/);
-  assert.doesNotMatch(`${panel}${game}`, /fetch\(/);
+  assert.match(gameBoard, /catalog-dropdown-trigger/);
+  assert.match(gameBoard, /role="listbox"/);
+  assert.match(gameBoard, /aria-selected/);
+  assert.doesNotMatch(gameBoard, /<select id="play-catalog"/);
+  assert.match(gameBoard, /selectPlayCatalog\(catalogId\)/);
+  assert.match(gameBoard, /start\(mode, true\)/);
+  assert.doesNotMatch(panel, /chooseForPlay|chooseForEdit/);
+  assert.doesNotMatch(`${panel}${game}${gameBoard}`, /fetch\(/);
   assert.doesNotMatch(panel, /无需登录|无需联网|本地模式|本机浏览器|当前浏览器|本地题库/);
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   createNextUnlimitedGame,
   createLocalGame,
@@ -15,7 +15,12 @@ import {
   type LocalGameMode,
   type TimingStats,
 } from "./local-game";
-import { loadLocalCatalog } from "./local-catalog";
+import {
+  loadCatalogLibrary,
+  loadLocalCatalog,
+  selectPlayCatalog,
+  type CatalogRecord,
+} from "./local-catalog";
 
 type PageTheme = "dong" | "flandre";
 
@@ -30,6 +35,10 @@ export function GameBoard() {
   const [busy, setBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [pageTheme, setPageTheme] = useState<PageTheme>("dong");
+  const [catalogChoices, setCatalogChoices] = useState<CatalogRecord[]>([]);
+  const [playCatalogId, setPlayCatalogId] = useState("");
+  const [showCatalogMenu, setShowCatalogMenu] = useState(false);
+  const catalogPickerRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
   const [timingStats, setTimingStats] = useState<TimingStats>({
     completedSessionIds: [],
@@ -63,10 +72,17 @@ export function GameBoard() {
     }
   }
 
+  function initialize() {
+    const library = loadCatalogLibrary();
+    setCatalogChoices(library.catalogs);
+    setPlayCatalogId(library.playCatalogId);
+    start("daily");
+  }
+
   useEffect(() => {
     // Initial data loading intentionally hydrates this client-only game board.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    start("daily");
+    initialize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -90,6 +106,15 @@ export function GameBoard() {
     const timer = window.setInterval(() => setNow(Date.now()), 100);
     return () => window.clearInterval(timer);
   }, [game]);
+
+  useEffect(() => {
+    if (!showCatalogMenu) return;
+    const closeMenu = (event: PointerEvent) => {
+      if (!catalogPickerRef.current?.contains(event.target as Node)) setShowCatalogMenu(false);
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, [showCatalogMenu]);
 
   const suggestions = useMemo(() => {
     if (!game || query.trim().length < 1) return [];
@@ -161,7 +186,16 @@ export function GameBoard() {
     });
   }
 
+  function changePlayCatalog(catalogId: string) {
+    setShowCatalogMenu(false);
+    if (catalogId === playCatalogId) return;
+    selectPlayCatalog(catalogId);
+    setPlayCatalogId(catalogId);
+    start(mode, true);
+  }
+
   const isFlandreTheme = pageTheme === "flandre";
+  const selectedCatalog = catalogChoices.find((catalog) => catalog.id === playCatalogId);
 
   return (
     <main className={`game-shell theme-${pageTheme}`}>
@@ -210,6 +244,40 @@ export function GameBoard() {
 
       <div className={`play-layout ${mode === "unlimited" ? "with-stats" : ""}`}>
       <section className="game-card" aria-label="东一把游戏挑战">
+        <div
+          className="game-catalog-picker"
+          ref={catalogPickerRef}
+          onKeyDown={(event) => { if (event.key === "Escape") setShowCatalogMenu(false); }}
+        >
+          <span>游玩题库</span>
+          <div className="catalog-dropdown">
+            <button
+              className="catalog-dropdown-trigger"
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={showCatalogMenu}
+              disabled={busy || catalogChoices.length === 0}
+              onClick={() => setShowCatalogMenu((visible) => !visible)}
+            >
+              <span>{selectedCatalog?.official ? "官方 · " : ""}{selectedCatalog?.name ?? "选择题库"}</span>
+              <i aria-hidden="true" />
+            </button>
+            {showCatalogMenu && (
+              <div className="catalog-dropdown-menu" role="listbox" aria-label="游玩题库">
+                {catalogChoices.map((catalog) => (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={catalog.id === playCatalogId}
+                    className={catalog.id === playCatalogId ? "selected" : ""}
+                    key={catalog.id}
+                    onClick={() => changePlayCatalog(catalog.id)}
+                  >{catalog.official ? "官方 · " : ""}{catalog.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
         <div className="mode-switch" aria-label="选择游戏模式">
           {(["daily", "unlimited"] as const).map((item) => (
             <button
