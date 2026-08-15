@@ -8,6 +8,7 @@ import {
   discardLocalGame,
   getElapsedMs,
   getLocalAnswerName,
+  loadActiveGameSessionIds,
   loadGameCatalog,
   loadGameRecords,
   loadLocalGame,
@@ -45,6 +46,7 @@ export function GameBoard() {
   const [showHelp, setShowHelp] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [gameRecords, setGameRecords] = useState<GameRecord[]>([]);
+  const [activeGameSessionIds, setActiveGameSessionIds] = useState<Set<string>>(() => new Set());
   const [pageTheme, setPageTheme] = useState<PageTheme>("dong");
   const [catalogChoices, setCatalogChoices] = useState<CatalogRecord[]>([]);
   const [playCatalogId, setPlayCatalogId] = useState("");
@@ -270,6 +272,7 @@ export function GameBoard() {
 
   function openHistory() {
     setShowHelp(false);
+    setActiveGameSessionIds(loadActiveGameSessionIds());
     setGameRecords([...loadGameRecords()].sort((left, right) => (
       (right.updatedAt ?? right.createdAt ?? 0) - (left.updatedAt ?? left.createdAt ?? 0)
     )));
@@ -554,37 +557,40 @@ export function GameBoard() {
             <p className="history-summary">共保存 {gameRecords.length} 局，最近游玩的对局排在前面。</p>
             {gameRecords.length ? (
               <div className="history-list">
-                {gameRecords.map((record) => (
-                  <details className="history-record" key={record.sessionId}>
-                    <summary>
-                      <span className={`history-result ${record.completed ? (record.won ? "won" : "lost") : "active"}`}>
-                        {formatRecordResult(record)}
-                      </span>
-                      <span className="history-answer">{record.completed ? record.answerName : "答案将在本局结束后显示"}</span>
-                      <span className="history-meta">
-                        {formatRecordMode(record.mode)} · {record.guesses.length} 次猜测 · {formatDuration(record.durationMs)}
-                      </span>
-                      <time>{formatRecordTime(record.updatedAt ?? record.createdAt)}</time>
-                    </summary>
-                    <div className="history-details">
-                      {record.guesses.length ? (
-                        <ol>
-                          {record.guesses.map((guess, index) => {
-                            const matches = guess.feedback.filter((item) => item.state === "match").length;
-                            const close = guess.feedback.filter((item) => item.state === "close").length;
-                            return (
-                              <li key={`${guess.id}-${index}`}>
-                                <span>第 {index + 1} 次 · {guess.name}</span>
-                                <span>{matches} 项命中 · {close} 项接近</span>
-                                <b>{guess.elapsedMs === null ? "—" : formatDuration(guess.elapsedMs)}</b>
-                              </li>
-                            );
-                          })}
-                        </ol>
-                      ) : <p>这局还没有提交猜测。</p>}
-                    </div>
-                  </details>
-                ))}
+                {gameRecords.map((record) => {
+                  const isActive = !record.completed && activeGameSessionIds.has(record.sessionId);
+                  return (
+                    <details className="history-record" key={record.sessionId}>
+                      <summary>
+                        <span className={`history-result ${record.completed ? (record.won ? "won" : "lost") : isActive ? "active" : "abandoned"}`}>
+                          {formatRecordResult(record, isActive)}
+                        </span>
+                        <span className="history-answer">{record.completed ? record.answerName : "答案将在本局结束后显示"}</span>
+                        <span className="history-meta">
+                          {formatRecordMode(record.mode)} · {record.guesses.length} 次猜测 · {formatDuration(record.durationMs)}
+                        </span>
+                        <time>{formatRecordTime(record.updatedAt ?? record.createdAt)}</time>
+                      </summary>
+                      <div className="history-details">
+                        {record.guesses.length ? (
+                          <ol>
+                            {record.guesses.map((guess, index) => {
+                              const matches = guess.feedback.filter((item) => item.state === "match").length;
+                              const close = guess.feedback.filter((item) => item.state === "close").length;
+                              return (
+                                <li key={`${guess.id}-${index}`}>
+                                  <span>第 {index + 1} 次 · {guess.name}</span>
+                                  <span>{matches} 项命中 · {close} 项接近</span>
+                                  <b>{guess.elapsedMs === null ? "—" : formatDuration(guess.elapsedMs)}</b>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        ) : <p>这局还没有提交猜测。</p>}
+                      </div>
+                    </details>
+                  );
+                })}
               </div>
             ) : <p className="empty-history history-empty">还没有游玩历史，开始一局后记录会显示在这里。</p>}
           </section>
@@ -598,8 +604,8 @@ function formatRecordMode(mode: LocalGameMode) {
   return mode === "daily" ? "每日挑战" : mode === "unlimited" ? "无限模式" : "自定义模式";
 }
 
-function formatRecordResult(record: GameRecord) {
-  if (!record.completed) return "进行中";
+function formatRecordResult(record: GameRecord, isActive: boolean) {
+  if (!record.completed) return isActive ? "进行中" : "已放弃";
   return record.won ? "已猜中" : "未猜出";
 }
 

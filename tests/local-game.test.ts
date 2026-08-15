@@ -22,6 +22,7 @@ import {
   createSpecifiedLocalGame,
   discardLocalGame,
   getElapsedMs,
+  loadActiveGameSessionIds,
   loadGameCatalog,
   loadGameRecords,
   loadLocalGame,
@@ -317,7 +318,7 @@ test("每次猜测及其时间会以不可直接读取的格式保存到本地",
   assert.equal(restored?.guesses[0].elapsedMs, 0);
 });
 
-test("完整日志实时更新并可复现包含目标角色的失败局", () => {
+test("零猜测新局不产生历史，提交猜测后完整日志实时更新", () => {
   const catalog = createDefaultCatalog();
   const storage = new MemoryStorage();
   let game = createLocalGame(catalog, "unlimited", 500);
@@ -327,8 +328,7 @@ test("完整日志实时更新并可复现包含目标角色的失败局", () =>
     .slice(0, game.maxAttempts);
 
   saveLocalGame(game, storage, catalog);
-  assert.equal(loadGameRecords(storage).length, 1);
-  assert.equal(loadGameRecords(storage)[0].guesses.length, 0);
+  assert.deepEqual(loadGameRecords(storage), []);
 
   for (const [index, character] of wrongCharacters.entries()) {
     const result = submitLocalGuess(catalog, game, character.name, (index + 1) * 1_000);
@@ -363,7 +363,7 @@ test("完整日志实时更新并可复现包含目标角色的失败局", () =>
   assert.throws(() => JSON.parse(raw));
 });
 
-test("进入无限模式下一轮后仍保留上一局的完整日志", () => {
+test("进入无限模式下一轮后保留上一局，但不记录尚未猜测的新局", () => {
   const catalog = createDefaultCatalog();
   const storage = new MemoryStorage();
   const firstGame = createLocalGame(catalog, "unlimited", 1_000);
@@ -377,15 +377,59 @@ test("进入无限模式下一轮后仍保留上一局的完整日志", () => {
   saveLocalGame(nextGame, storage, catalog);
   const records = loadGameRecords(storage);
 
-  assert.equal(records.length, 2);
-  assert.deepEqual(records.map((record) => record.sessionId), [won.game.sessionId, nextGame.sessionId]);
+  assert.equal(records.length, 1);
+  assert.deepEqual(records.map((record) => record.sessionId), [won.game.sessionId]);
   assert.equal(records[0].answerName, firstAnswer.name);
   assert.equal(records[0].guesses.length, 1);
   assert.equal(records[0].completed, true);
-  assert.equal(records[1].guesses.length, 0);
-  assert.equal(records[1].completed, false);
-  assert.equal(records[1].unlimitedRunId, records[0].unlimitedRunId);
-  assert.equal(records[1].unlimitedRound, 2);
+  assert.equal(nextGame.unlimitedRunId, records[0].unlimitedRunId);
+  assert.equal(nextGame.unlimitedRound, 2);
+});
+
+test("读取历史时过滤旧版本留下的零猜测记录", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  const game = createLocalGame(catalog, "custom", 1_000);
+  const answer = catalog.characters.find((item) => item.id === game.answerCharacterId)!;
+  const result = submitLocalGuess(catalog, game, answer.name, 2_000);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  saveLocalGame(result.game, storage, catalog);
+
+  const validRecord = loadGameRecords(storage)[0];
+  storage.setItem("dongyiba:game-records:v1", JSON.stringify({
+    schemaVersion: 1,
+    records: [{
+      ...validRecord,
+      sessionId: "legacy-empty-session",
+      startedAt: null,
+      updatedAt: validRecord.createdAt,
+      completedAt: null,
+      guesses: [],
+      completed: false,
+      won: null,
+      durationMs: 0,
+    }, validRecord],
+  }));
+
+  assert.deepEqual(loadGameRecords(storage).map((record) => record.sessionId), [validRecord.sessionId]);
+});
+
+test("只有仍对应当前可恢复存档的未完成历史才处于进行中", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  const game = createLocalGame(catalog, "custom", 1_000);
+  const guessed = catalog.characters.find((item) => item.active && item.id !== game.answerCharacterId)!;
+  const result = submitLocalGuess(catalog, game, guessed.name, 2_000);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  saveLocalGame(result.game, storage, catalog);
+  assert.deepEqual([...loadActiveGameSessionIds(storage)], [result.game.sessionId]);
+
+  const replacement = createLocalGame(catalog, "custom", 3_000);
+  saveLocalGame(replacement, storage, catalog);
+  assert.equal(loadGameRecords(storage)[0].sessionId, result.game.sessionId);
+  assert.deepEqual([...loadActiveGameSessionIds(storage)], [replacement.sessionId]);
 });
 
 test("旧无限模式存档迁移到自定义模式，并在下次保存时转为混淆格式", () => {

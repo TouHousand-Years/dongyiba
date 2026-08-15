@@ -84,10 +84,12 @@ test("游戏页选择游玩题库，后台点击题库进行编辑或预览", as
   assert.match(gameBoard, /suggestions specified-suggestions/);
   assert.match(gameBoard, /setSpecifiedCharacterInput\(name\)/);
   assert.match(gameBoard, /loadGameRecords\(\)/);
+  assert.match(gameBoard, /loadActiveGameSessionIds\(\)/);
   assert.match(gameBoard, /游戏玩法<\/button>\s*<button[^>]*onClick=\{openHistory\}>游玩历史/);
   assert.match(gameBoard, /aria-labelledby="history-title"/);
   assert.match(gameBoard, /record\.guesses\.map/);
   assert.match(gameBoard, /答案将在本局结束后显示/);
+  assert.match(gameBoard, /isActive \? "进行中" : "已放弃"/);
   assert.doesNotMatch(panel, /chooseForPlay|chooseForEdit/);
   assert.doesNotMatch(`${panel}${game}${gameBoard}`, /fetch\(/);
   assert.doesNotMatch(panel, /无需登录|无需联网|本地模式|本机浏览器|当前浏览器|本地题库/);

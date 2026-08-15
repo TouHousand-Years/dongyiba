@@ -361,6 +361,7 @@ footer { text-align: center; color: #998d92; font-size: 11px; letter-spacing: .0
 .history-result.won { background: var(--green); }
 .history-result.lost { background: var(--gray); }
 .history-result.active { background: var(--amber); }
+.history-result.abandoned { background: var(--gray); }
 .history-answer { min-width: 0; overflow: hidden; color: var(--ink); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .history-meta, .history-record time { color: var(--muted); font: 11px/1.4 Arial, sans-serif; }
 .history-record time { grid-column: 2; }

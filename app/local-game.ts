@@ -411,6 +411,29 @@ export function loadLocalGame(
   }
 }
 
+export function loadActiveGameSessionIds(
+  storage: LocalStorageLike | null = getBrowserStorage(),
+): Set<string> {
+  const sessionIds = new Set<string>();
+  if (!storage) return sessionIds;
+  try {
+    const stored = storage.getItem(GAME_STORAGE_KEY);
+    if (!stored) return sessionIds;
+    const parsed: unknown = parseStoredGameData(stored);
+    if (!parsed || typeof parsed !== "object") return sessionIds;
+    const games = parsed as Record<string, unknown>;
+    for (const mode of ["daily", "unlimited", "custom"] satisfies LocalGameMode[]) {
+      const game = games[mode];
+      if (game && typeof game === "object" && typeof (game as Partial<LocalGame>).sessionId === "string") {
+        sessionIds.add((game as Partial<LocalGame>).sessionId!);
+      }
+    }
+  } catch {
+    // An unreadable save cannot identify any resumable sessions.
+  }
+  return sessionIds;
+}
+
 export function discardLocalGame(
   game: LocalGame,
   storage: LocalStorageLike | null = getBrowserStorage(),
@@ -447,7 +470,7 @@ function isGameRecord(value: unknown): value is GameRecord {
     Number.isInteger(record.unlimitedRound) && Number.isInteger(record.answerCharacterId) &&
     typeof record.answerName === "string" && Array.isArray(record.candidateNames) &&
     record.candidateNames.every((name) => typeof name === "string") && Array.isArray(record.tags) &&
-    Array.isArray(record.guesses) && record.guesses.every((guess) => (
+    Array.isArray(record.guesses) && record.guesses.length > 0 && record.guesses.every((guess) => (
       isStoredGuess(guess) && guess.guessedAt !== undefined && guess.elapsedMs !== undefined
     )) && typeof record.completed === "boolean" &&
     (record.won === null || typeof record.won === "boolean") &&
@@ -532,7 +555,9 @@ export function saveLocalGame(
   }
   saved[game.mode] = game;
   storage.setItem(GAME_STORAGE_KEY, obfuscateGameData(saved));
-  if (!game.excludedFromHistory) saveGameRecord(game, catalog, storage);
+  if (!game.excludedFromHistory && game.guesses.length > 0) {
+    saveGameRecord(game, catalog, storage);
+  }
 }
 
 function findCharacter(catalog: LocalCatalog, name: string): LocalCharacter | null {
