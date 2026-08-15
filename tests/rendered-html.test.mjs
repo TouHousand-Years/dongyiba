@@ -74,6 +74,12 @@ test("游戏页选择游玩题库，后台点击题库进行编辑或预览", as
   assert.match(gameBoard, /loadGameCatalog\(nextMode\)/);
   assert.doesNotMatch(gameBoard, /fixed-catalog|STANDARD_GAME_CATALOG_NAME/);
   assert.match(gameBoard, />游玩题库</);
+  assert.match(gameBoard, /htmlFor="specified-character"/);
+  assert.match(gameBoard, /已指定人物/);
+  assert.match(gameBoard, /createSpecifiedLocalGame/);
+  assert.match(gameBoard, /specifiedSuggestions/);
+  assert.match(gameBoard, /suggestions specified-suggestions/);
+  assert.match(gameBoard, /setSpecifiedCharacterInput\(name\)/);
   assert.doesNotMatch(panel, /chooseForPlay|chooseForEdit/);
   assert.doesNotMatch(`${panel}${game}${gameBoard}`, /fetch\(/);
   assert.doesNotMatch(panel, /无需登录|无需联网|本地模式|本机浏览器|当前浏览器|本地题库/);

@@ -19,6 +19,7 @@ import {
 import {
   createLocalGame,
   createNextUnlimitedGame,
+  createSpecifiedLocalGame,
   discardLocalGame,
   getElapsedMs,
   loadGameCatalog,
@@ -475,6 +476,41 @@ test("自定义模式保留原无限模式的连续轮次行为", () => {
   assert.equal(next.mode, "custom");
   assert.equal(next.unlimitedRound, 2);
   assert.equal(next.unlimitedRunId, game.unlimitedRunId);
+});
+
+test("自定义模式可以指定人物，且该局不计入游玩历史或生涯统计", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  const target = catalog.characters.find((character) => character.active && character.aliases.length > 0)!;
+  const game = createSpecifiedLocalGame(catalog, target.aliases[0], 500);
+
+  assert.equal(game.answerCharacterId, target.id);
+  assert.equal(game.excludedFromHistory, true);
+  saveLocalGame(game, storage, catalog);
+  assert.equal(loadLocalGame("custom", catalog, storage)?.excludedFromHistory, true);
+  assert.deepEqual(loadGameRecords(storage), []);
+
+  const won = submitLocalGuess(catalog, game, target.name, 1_000);
+  assert.equal(won.ok, true);
+  if (!won.ok) return;
+  saveLocalGame(won.game, storage, catalog);
+  recordCompletedTiming(won.game, storage);
+  assert.deepEqual(loadGameRecords(storage), []);
+  assert.deepEqual(loadTimingStats(storage), {
+    completedSessionIds: [],
+    winDurationsMs: [],
+    winAttempts: [],
+  });
+
+  const next = createNextUnlimitedGame(catalog, won.game, 2_000);
+  assert.equal(next.excludedFromHistory, false);
+});
+
+test("指定人物必须存在于当前题库", () => {
+  assert.throws(
+    () => createSpecifiedLocalGame(createDefaultCatalog(), "不存在的人物"),
+    /题库中没有这位角色/,
+  );
 });
 
 test("无限模式生涯计时只统计成功对局，且同一局不会重复记录", () => {

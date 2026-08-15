@@ -269,7 +269,16 @@ h1 { margin: 0; font-size: clamp(44px, 8vw, 72px); font-weight: 700; letter-spac
 .mode-switch { width: fit-content; display: flex; padding: 4px; border-radius: 999px; background: var(--paper-deep); margin: 0 auto 24px; }
 .mode-switch button { border: 0; border-radius: 999px; padding: 9px 22px; color: var(--muted); background: transparent; font-size: 13px; }
 .mode-switch button.active { color: white; background: var(--red); box-shadow: 0 4px 14px rgba(165,40,65,.22); }
-.game-catalog-picker { width: min(360px, 100%); display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; margin: 0 auto 14px; color: var(--muted); font-size: 12px; }
+.custom-game-options { width: min(760px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .82fr); align-items: center; gap: 18px; margin: 0 auto 14px; }
+.game-catalog-picker { min-width: 0; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.specified-character-picker { min-width: 0; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.specified-input-row { min-width: 0; display: flex; }
+.specified-autocomplete { min-width: 0; flex: 1; position: relative; }
+.specified-character-picker input { min-width: 0; width: 100%; height: 38px; border: 1px solid #d8cbc5; border-radius: 999px 0 0 999px; padding: 0 14px; background: var(--paper); color: var(--ink); outline: none; }
+.specified-character-picker input:focus { position: relative; border-color: var(--red); box-shadow: 0 0 0 3px rgba(165,40,65,.09); }
+.specified-input-row > button { min-width: 52px; height: 38px; border: 1px solid var(--red); border-left: 0; border-radius: 0 999px 999px 0; padding: 0 13px; background: var(--red); color: white; white-space: nowrap; }
+.specified-input-row > button:disabled { opacity: .45; cursor: not-allowed; }
+.specified-suggestions { top: 44px; }
 .catalog-dropdown { min-width: 0; position: relative; }
 .catalog-dropdown-trigger { width: 100%; height: 38px; display: flex; align-items: center; gap: 12px; border: 1px solid #d8cbc5; border-radius: 999px; padding: 0 14px 0 16px; background: var(--paper); color: var(--ink); text-align: left; outline: none; }
 .catalog-dropdown-trigger > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -453,6 +462,9 @@ footer { text-align: center; color: #998d92; font-size: 11px; letter-spacing: .0
 .theme-flandre .catalog-dropdown-menu button { color: #fff2f5; }
 .theme-flandre .catalog-dropdown-menu button:hover, .theme-flandre .catalog-dropdown-menu button:focus-visible { background: #341321; }
 .theme-flandre .catalog-dropdown-menu button.selected { background: #c51f47; }
+.theme-flandre .specified-character-picker input { border-color: #633648; background: #130b12; color: #fff2f5; }
+.theme-flandre .specified-character-picker input:focus { border-color: #f13b62; box-shadow: 0 0 0 3px rgba(241,59,98,.15); }
+.theme-flandre .specified-input-row > button { border-color: #c51f47; background: #c51f47; }
 .theme-flandre .autocomplete input {
   border-color: #633648; background: #130b12; color: #fff2f5;
 }
@@ -493,6 +505,7 @@ footer { text-align: center; color: #998d92; font-size: 11px; letter-spacing: .0
   .status-strip span { padding: 0 11px; }
   .timer-strip span { min-width: 112px; padding-inline: 13px; }
   .game-card { padding: 17px 12px; border-radius: 14px; }
+  .custom-game-options { grid-template-columns: 1fr; gap: 9px; }
   .mode-switch button { padding-inline: 17px; }
   .input-row { gap: 7px; }
   .submit-button { padding: 0 19px; }

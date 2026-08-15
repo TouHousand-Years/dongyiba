@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   createNextUnlimitedGame,
   createLocalGame,
+  createSpecifiedLocalGame,
   discardLocalGame,
   getElapsedMs,
   getLocalAnswerName,
@@ -44,6 +45,7 @@ export function GameBoard() {
   const [catalogChoices, setCatalogChoices] = useState<CatalogRecord[]>([]);
   const [playCatalogId, setPlayCatalogId] = useState("");
   const [showCatalogMenu, setShowCatalogMenu] = useState(false);
+  const [specifiedCharacterInput, setSpecifiedCharacterInput] = useState("");
   const catalogPickerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<LocalGame | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -53,17 +55,20 @@ export function GameBoard() {
     winAttempts: [],
   });
 
-  function start(nextMode: LocalGameMode = mode, forceNew = false) {
+  function start(nextMode: LocalGameMode = mode, forceNew = false, specifiedCharacterName = "") {
     setBusy(true);
     try {
       const catalog = loadGameCatalog(nextMode);
       const restored = forceNew ? null : loadLocalGame(nextMode, catalog);
-      const nextGame = restored ?? createLocalGame(catalog, nextMode);
+      const nextGame = restored ?? (specifiedCharacterName
+        ? createSpecifiedLocalGame(catalog, specifiedCharacterName)
+        : createLocalGame(catalog, nextMode));
       saveLocalGame(nextGame, undefined, catalog);
       setTimingStats(nextGame.completed ? recordCompletedTiming(nextGame) : loadTimingStats());
       setGame(nextGame);
       setNow(Date.now());
       setQuery("");
+      setSpecifiedCharacterInput(nextGame.excludedFromHistory ? "已指定人物" : "");
       setAnswer(nextGame.completed ? getLocalAnswerName(catalog, nextGame) : "");
       setMessage(
         nextGame.completed
@@ -72,8 +77,12 @@ export function GameBoard() {
             ? "输入角色名，开始今天这一把。"
             : "新角色已藏好。",
       );
-    } catch {
-      setMessage("题库尚未配置完成，请打开标签后台检查。");
+    } catch (error) {
+      setMessage(
+        specifiedCharacterName && error instanceof Error
+          ? error.message
+          : "题库尚未配置完成，请打开标签后台检查。",
+      );
     } finally {
       setBusy(false);
     }
@@ -159,12 +168,23 @@ export function GameBoard() {
     return () => document.removeEventListener("pointerdown", closeMenu);
   }, [showCatalogMenu]);
 
+  const selectedCatalog = catalogChoices.find((catalog) => catalog.id === playCatalogId);
+
   const suggestions = useMemo(() => {
     if (!game || query.trim().length < 1) return [];
     return game.names
       .filter((name) => name.includes(query.trim()) && !game.guesses.some((guess) => guess.name === name))
       .slice(0, 6);
   }, [game, query]);
+
+  const specifiedSuggestions = useMemo(() => {
+    const input = specifiedCharacterInput.trim();
+    if (!selectedCatalog || input.length < 1 || input === "已指定人物") return [];
+    return selectedCatalog.catalog.characters
+      .filter((character) => character.active && character.name.includes(input))
+      .slice(0, 6)
+      .map((character) => character.name);
+  }, [selectedCatalog, specifiedCharacterInput]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -237,8 +257,14 @@ export function GameBoard() {
     start("custom", true);
   }
 
+  function specifyCharacter(event: FormEvent) {
+    event.preventDefault();
+    const name = specifiedCharacterInput.trim();
+    if (!name || name === "已指定人物" || busy) return;
+    start("custom", true, name);
+  }
+
   const isFlandreTheme = pageTheme === "flandre";
-  const selectedCatalog = catalogChoices.find((catalog) => catalog.id === playCatalogId);
 
   return (
     <main className={`game-shell theme-${pageTheme}`}>
@@ -288,39 +314,64 @@ export function GameBoard() {
       <div className={`play-layout ${isContinuousMode(mode) ? "with-stats" : ""}`}>
       <section className="game-card" aria-label="东一把游戏挑战">
         {mode === "custom" && (
-          <div
-            className="game-catalog-picker"
-            ref={catalogPickerRef}
-            onKeyDown={(event) => { if (event.key === "Escape") setShowCatalogMenu(false); }}
-          >
-            <span>游玩题库</span>
-            <div className="catalog-dropdown">
-              <button
-                className="catalog-dropdown-trigger"
-                type="button"
-                aria-haspopup="listbox"
-                aria-expanded={showCatalogMenu}
-                disabled={busy || catalogChoices.length === 0}
-                onClick={() => setShowCatalogMenu((visible) => !visible)}
-              >
-                <span>{selectedCatalog?.official ? "官方 · " : ""}{selectedCatalog?.name ?? "选择题库"}</span>
-                <i aria-hidden="true" />
-              </button>
-              {showCatalogMenu && (
-                <div className="catalog-dropdown-menu" role="listbox" aria-label="游玩题库">
-                  {catalogChoices.map((catalog) => (
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={catalog.id === playCatalogId}
-                      className={catalog.id === playCatalogId ? "selected" : ""}
-                      key={catalog.id}
-                      onClick={() => changePlayCatalog(catalog.id)}
-                    >{catalog.official ? "官方 · " : ""}{catalog.name}</button>
-                  ))}
-                </div>
-              )}
+          <div className="custom-game-options">
+            <div
+              className="game-catalog-picker"
+              ref={catalogPickerRef}
+              onKeyDown={(event) => { if (event.key === "Escape") setShowCatalogMenu(false); }}
+            >
+              <span>游玩题库</span>
+              <div className="catalog-dropdown">
+                <button
+                  className="catalog-dropdown-trigger"
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded={showCatalogMenu}
+                  disabled={busy || catalogChoices.length === 0}
+                  onClick={() => setShowCatalogMenu((visible) => !visible)}
+                >
+                  <span>{selectedCatalog?.official ? "官方 · " : ""}{selectedCatalog?.name ?? "选择题库"}</span>
+                  <i aria-hidden="true" />
+                </button>
+                {showCatalogMenu && (
+                  <div className="catalog-dropdown-menu" role="listbox" aria-label="游玩题库">
+                    {catalogChoices.map((catalog) => (
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={catalog.id === playCatalogId}
+                        className={catalog.id === playCatalogId ? "selected" : ""}
+                        key={catalog.id}
+                        onClick={() => changePlayCatalog(catalog.id)}
+                      >{catalog.official ? "官方 · " : ""}{catalog.name}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
+            <form className="specified-character-picker" onSubmit={specifyCharacter}>
+              <label htmlFor="specified-character">指定人物</label>
+              <div className="specified-input-row">
+                <div className="specified-autocomplete">
+                  <input
+                    id="specified-character"
+                    value={specifiedCharacterInput}
+                    onChange={(event) => setSpecifiedCharacterInput(event.target.value)}
+                    placeholder="输入角色名"
+                    autoComplete="off"
+                    disabled={busy}
+                  />
+                  {specifiedSuggestions.length > 0 && (
+                    <div className="suggestions specified-suggestions">
+                      {specifiedSuggestions.map((name) => (
+                        <button type="button" key={name} onClick={() => setSpecifiedCharacterInput(name)}>{name}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button type="submit" disabled={!specifiedCharacterInput.trim() || specifiedCharacterInput === "已指定人物" || busy}>指定</button>
+              </div>
+            </form>
           </div>
         )}
         <div className="mode-switch" aria-label="选择游戏模式">

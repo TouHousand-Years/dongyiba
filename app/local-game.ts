@@ -40,6 +40,7 @@ export type LocalGame = {
   dayKey: string;
   challengeNumber: number;
   mode: LocalGameMode;
+  excludedFromHistory: boolean;
   maxAttempts: number;
   answerCharacterId: number;
   names: string[];
@@ -164,6 +165,16 @@ function newSessionId(): string {
 }
 
 export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode, now = Date.now()): LocalGame {
+  return createLocalGameWithAnswer(catalog, mode, now, null, false);
+}
+
+function createLocalGameWithAnswer(
+  catalog: LocalCatalog,
+  mode: LocalGameMode,
+  now: number,
+  specifiedAnswer: LocalCharacter | null,
+  excludedFromHistory: boolean,
+): LocalGame {
   const characters = getActiveCharacters(catalog);
   const tags = getActiveTags(catalog);
   if (!characters.length || !tags.length) throw new Error("题库尚未配置完成。");
@@ -179,8 +190,9 @@ export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode, now 
     dayKey: day,
     challengeNumber: challengeNumber(day),
     mode,
+    excludedFromHistory,
     maxAttempts: 8,
-    answerCharacterId: characters[index].id,
+    answerCharacterId: specifiedAnswer?.id ?? characters[index].id,
     names: characters.map((character) => character.name),
     tags: toTagDefinitions(tags),
     attempts: 0,
@@ -268,6 +280,7 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
     dayKey: stored.dayKey,
     challengeNumber: challengeNumber(stored.dayKey),
     mode,
+    excludedFromHistory: stored.excludedFromHistory === true,
     maxAttempts: 8,
     answerCharacterId,
     names: characters.map((character) => character.name),
@@ -355,7 +368,7 @@ export function recordCompletedTiming(
 ): TimingStats {
   const stats = loadTimingStats(storage);
   if (
-    !storage || !isContinuousMode(game.mode) || !game.completed ||
+    !storage || game.excludedFromHistory || !isContinuousMode(game.mode) || !game.completed ||
     stats.completedSessionIds.includes(game.sessionId)
   ) return stats;
   const next = {
@@ -519,7 +532,7 @@ export function saveLocalGame(
   }
   saved[game.mode] = game;
   storage.setItem(GAME_STORAGE_KEY, obfuscateGameData(saved));
-  saveGameRecord(game, catalog, storage);
+  if (!game.excludedFromHistory) saveGameRecord(game, catalog, storage);
 }
 
 function findCharacter(catalog: LocalCatalog, name: string): LocalCharacter | null {
@@ -527,6 +540,16 @@ function findCharacter(catalog: LocalCatalog, name: string): LocalCharacter | nu
   return getActiveCharacters(catalog).find((character) =>
     [character.name, ...character.aliases].some((candidate) => normalizeName(candidate) === targetName),
   ) ?? null;
+}
+
+export function createSpecifiedLocalGame(
+  catalog: LocalCatalog,
+  name: string,
+  now = Date.now(),
+): LocalGame {
+  const answer = findCharacter(catalog, name);
+  if (!answer) throw new Error("题库中没有这位角色，请输入完整角色名或别名。");
+  return createLocalGameWithAnswer(catalog, "custom", now, answer, true);
 }
 
 function valuesFor(catalog: LocalCatalog, characterId: number): CharacterValue[] {
