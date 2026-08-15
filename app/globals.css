@@ -223,10 +223,10 @@ h1 { margin: 0; font-size: clamp(44px, 8vw, 72px); font-weight: 700; letter-spac
 .timer-strip span + span { border-left: 1px solid #e5d9d4; }
 .timer-strip small { display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; letter-spacing: .1em; }
 .timer-strip b { color: var(--red-dark); font-size: 18px; font-variant-numeric: tabular-nums; }
-.play-layout { position: relative; z-index: 1; max-width: 920px; margin: auto; }
-.play-layout.with-stats { max-width: 1200px; display: grid; grid-template-columns: minmax(0, 920px) 260px; gap: 18px; align-items: start; }
+.play-layout { position: relative; z-index: 1; max-width: 1104px; margin: auto; }
+.play-layout.with-stats { max-width: 1384px; display: grid; grid-template-columns: minmax(0, 1012px) 260px; gap: 18px; align-items: start; }
 .game-card {
-  position: relative; z-index: 1; width: 100%; max-width: 920px; margin: auto; padding: 22px;
+  position: relative; z-index: 1; width: 100%; max-width: 1104px; margin: auto; padding: 22px;
   border: 1px solid #dfd2cc; border-radius: 18px;
   background: rgba(255,255,255,.76); box-shadow: 0 18px 60px rgba(78,44,47,.08);
   backdrop-filter: blur(12px);
@@ -500,7 +500,7 @@ footer { text-align: center; color: #998d92; font-size: 11px; letter-spacing: .0
 }
 
 @media (max-width: 1040px) {
-  .play-layout.with-stats { max-width: 920px; grid-template-columns: 1fr; }
+  .play-layout.with-stats { max-width: 1012px; grid-template-columns: 1fr; }
   .timing-panel { order: 2; }
   .round-history { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; }
 }
