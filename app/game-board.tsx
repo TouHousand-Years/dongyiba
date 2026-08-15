@@ -634,10 +634,25 @@ export function GameBoard() {
                         {record.mode === "ten" && record.tenMatchRounds?.length ? (
                           <ol className="ten-match-record-rounds">
                             {record.tenMatchRounds.map((round) => (
-                              <li key={round.round}>
-                                <span>第 {round.round} 局 · {round.answer}</span>
-                                <span>{round.won ? "已猜出" : round.guesses.length >= record.maxAttempts ? "次数用尽" : "未完成"}</span>
-                                <b>{round.guesses.length} 次</b>
+                              <li className="ten-match-record-round" key={round.round}>
+                                <div className="ten-match-round-head">
+                                  <span>第 {round.round} 局 · {round.answer}</span>
+                                  <span>{round.won ? "已猜出" : round.guesses.length >= record.maxAttempts ? "次数用尽" : "未完成"}</span>
+                                  <b>{round.guesses.length} 次</b>
+                                </div>
+                                <ol className="ten-match-round-guesses">
+                                  {round.guesses.map((guess, index) => {
+                                    const matches = guess.feedback.filter((item) => item.state === "match").length;
+                                    const close = guess.feedback.filter((item) => item.state === "close").length;
+                                    return (
+                                      <li key={`${round.round}-${guess.id}-${index}`}>
+                                        <span>第 {index + 1} 次 · {guess.name}</span>
+                                        <span>{matches} 项命中 · {close} 项接近</span>
+                                        <b>{guess.id === round.answerCharacterId ? "猜中" : index === 0 ? "首猜" : "猜错"}</b>
+                                      </li>
+                                    );
+                                  })}
+                                </ol>
                               </li>
                             ))}
                           </ol>

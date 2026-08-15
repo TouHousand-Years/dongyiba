@@ -93,6 +93,8 @@ test("游戏页选择游玩题库，后台点击题库进行编辑或预览", as
   assert.match(gameBoard, /游戏玩法<\/button>\s*<button[^>]*onClick=\{openHistory\}>游玩历史/);
   assert.match(gameBoard, /aria-labelledby="history-title"/);
   assert.match(gameBoard, /record\.guesses\.map/);
+  assert.match(gameBoard, /round\.guesses\.map/);
+  assert.match(gameBoard, /ten-match-round-guesses/);
   assert.match(gameBoard, /答案将在本局结束后显示/);
   assert.match(gameBoard, /isActive \? "进行中" : "已放弃"/);
   assert.doesNotMatch(panel, /chooseForPlay|chooseForEdit/);
@@ -101,14 +103,17 @@ test("游戏页选择游玩题库，后台点击题库进行编辑或预览", as
 });
 
 test("提供无需 Node.js 和 node_modules 的 Windows 便携版", async () => {
-  const [launcher, script, packager, config, viteConfig] = await Promise.all([
+  const [launcher, staticUpdater, script, packager, config, viteConfig] = await Promise.all([
     readFile(new URL("../启动东一把.cmd", import.meta.url), "utf8"),
+    readFile(new URL("../更新静态页面.cmd", import.meta.url), "utf8"),
     readFile(new URL("../scripts/start-local.ps1", import.meta.url), "utf8"),
     readFile(new URL("../scripts/build-portable.ps1", import.meta.url), "utf8"),
     readFile(new URL("../next.config.ts", import.meta.url), "utf8"),
     readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
   ]);
   assert.match(launcher, /scripts\\start-local\.ps1/);
+  assert.match(staticUpdater, /call npm\.cmd run build/);
+  assert.match(staticUpdater, /dist\\client\\index\.html/);
   assert.match(script, /http:\/\/127\.0\.0\.1:\$port\//);
   assert.match(script, /TcpListener/);
   assert.match(script, /dist\\client/);
