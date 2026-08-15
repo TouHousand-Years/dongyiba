@@ -9,6 +9,7 @@ import {
   getElapsedMs,
   getLocalAnswerName,
   loadGameCatalog,
+  loadGameRecords,
   loadLocalGame,
   loadTimingStats,
   recordCompletedTiming,
@@ -16,6 +17,7 @@ import {
   submitLocalGuess,
   type LocalGame,
   type LocalGameMode,
+  type GameRecord,
   type TimingStats,
 } from "./local-game";
 import {
@@ -41,6 +43,8 @@ export function GameBoard() {
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [gameRecords, setGameRecords] = useState<GameRecord[]>([]);
   const [pageTheme, setPageTheme] = useState<PageTheme>("dong");
   const [catalogChoices, setCatalogChoices] = useState<CatalogRecord[]>([]);
   const [playCatalogId, setPlayCatalogId] = useState("");
@@ -264,6 +268,14 @@ export function GameBoard() {
     start("custom", true, name);
   }
 
+  function openHistory() {
+    setShowHelp(false);
+    setGameRecords([...loadGameRecords()].sort((left, right) => (
+      (right.updatedAt ?? right.createdAt ?? 0) - (left.updatedAt ?? left.createdAt ?? 0)
+    )));
+    setShowHistory(true);
+  }
+
   const isFlandreTheme = pageTheme === "flandre";
 
   return (
@@ -284,7 +296,8 @@ export function GameBoard() {
             {isFlandreTheme ? "东一把" : "芙一把"}
           </button>
           <a className="admin-link" href="admin/">标签后台</a>
-          <button className="ghost-button" onClick={() => setShowHelp(true)}>游戏玩法</button>
+          <button className="ghost-button" onClick={() => { setShowHistory(false); setShowHelp(true); }}>游戏玩法</button>
+          <button className="ghost-button" onClick={openHistory}>游玩历史</button>
         </div>
       </header>
 
@@ -531,8 +544,75 @@ export function GameBoard() {
           </section>
         </div>
       )}
+
+      {showHistory && (
+        <div className="modal-backdrop" onClick={() => setShowHistory(false)}>
+          <section className="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-title" onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" aria-label="关闭" onClick={() => setShowHistory(false)}>×</button>
+            <p className="eyebrow">Play history</p>
+            <h2 id="history-title">游玩历史</h2>
+            <p className="history-summary">共保存 {gameRecords.length} 局，最近游玩的对局排在前面。</p>
+            {gameRecords.length ? (
+              <div className="history-list">
+                {gameRecords.map((record) => (
+                  <details className="history-record" key={record.sessionId}>
+                    <summary>
+                      <span className={`history-result ${record.completed ? (record.won ? "won" : "lost") : "active"}`}>
+                        {formatRecordResult(record)}
+                      </span>
+                      <span className="history-answer">{record.completed ? record.answerName : "答案将在本局结束后显示"}</span>
+                      <span className="history-meta">
+                        {formatRecordMode(record.mode)} · {record.guesses.length} 次猜测 · {formatDuration(record.durationMs)}
+                      </span>
+                      <time>{formatRecordTime(record.updatedAt ?? record.createdAt)}</time>
+                    </summary>
+                    <div className="history-details">
+                      {record.guesses.length ? (
+                        <ol>
+                          {record.guesses.map((guess, index) => {
+                            const matches = guess.feedback.filter((item) => item.state === "match").length;
+                            const close = guess.feedback.filter((item) => item.state === "close").length;
+                            return (
+                              <li key={`${guess.id}-${index}`}>
+                                <span>第 {index + 1} 次 · {guess.name}</span>
+                                <span>{matches} 项命中 · {close} 项接近</span>
+                                <b>{guess.elapsedMs === null ? "—" : formatDuration(guess.elapsedMs)}</b>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      ) : <p>这局还没有提交猜测。</p>}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            ) : <p className="empty-history history-empty">还没有游玩历史，开始一局后记录会显示在这里。</p>}
+          </section>
+        </div>
+      )}
     </main>
   );
+}
+
+function formatRecordMode(mode: LocalGameMode) {
+  return mode === "daily" ? "每日挑战" : mode === "unlimited" ? "无限模式" : "自定义模式";
+}
+
+function formatRecordResult(record: GameRecord) {
+  if (!record.completed) return "进行中";
+  return record.won ? "已猜中" : "未猜出";
+}
+
+function formatRecordTime(timestamp: number | null) {
+  if (timestamp === null) return "时间未知";
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(timestamp);
 }
 
 function formatDuration(durationMs: number) {

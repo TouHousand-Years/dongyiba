@@ -27,6 +27,9 @@ test("玩家首页使用真实游戏组件和正式元数据", async () => {
   assert.match(updateCenter, /当前题库基线.*DEFAULT_CATALOG_VERSION/);
   assert.match(game, /document\.documentElement\.dataset\.theme = pageTheme/);
   assert.match(styles, /html\[data-theme="flandre"\] \.update-panel/);
+  assert.match(styles, /\.history-list::\-webkit-scrollbar-thumb/);
+  assert.match(styles, /scrollbar-color:\s*var\(--red\)\s+var\(--paper-deep\)/);
+  assert.match(styles, /\.history-list::\-webkit-scrollbar-button\s*\{[^}]*display:\s*none/);
   assert.doesNotMatch(`${page}${layout}${game}`, /codex-preview|react-loading-skeleton/);
 });
 
@@ -80,6 +83,11 @@ test("游戏页选择游玩题库，后台点击题库进行编辑或预览", as
   assert.match(gameBoard, /specifiedSuggestions/);
   assert.match(gameBoard, /suggestions specified-suggestions/);
   assert.match(gameBoard, /setSpecifiedCharacterInput\(name\)/);
+  assert.match(gameBoard, /loadGameRecords\(\)/);
+  assert.match(gameBoard, /游戏玩法<\/button>\s*<button[^>]*onClick=\{openHistory\}>游玩历史/);
+  assert.match(gameBoard, /aria-labelledby="history-title"/);
+  assert.match(gameBoard, /record\.guesses\.map/);
+  assert.match(gameBoard, /答案将在本局结束后显示/);
   assert.doesNotMatch(panel, /chooseForPlay|chooseForEdit/);
   assert.doesNotMatch(`${panel}${game}${gameBoard}`, /fetch\(/);
   assert.doesNotMatch(panel, /无需登录|无需联网|本地模式|本机浏览器|当前浏览器|本地题库/);
