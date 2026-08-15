@@ -101,6 +101,37 @@ test("题库集合将官方题库排在玩家题库之前并分别保存游玩�
   assert.equal(storage.getItem("dongyiba:games:v1"), null);
 });
 
+test("当前官方题库内容更新后会清除旧的进行中游戏", () => {
+  const storage = new MemoryStorage();
+  const library = loadCatalogLibrary(storage);
+  const catalog = loadLocalCatalog(storage);
+  saveLocalGame(createLocalGame(catalog, "daily"), storage, catalog);
+
+  const storedLibrary = JSON.parse(storage.getItem("dongyiba:catalog-library:v2")!);
+  storedLibrary.officialCatalogVersions[library.playCatalogId] = "outdated";
+  storage.setItem("dongyiba:catalog-library:v2", JSON.stringify(storedLibrary));
+
+  loadCatalogLibrary(storage);
+  assert.equal(storage.getItem("dongyiba:games:v1"), null);
+});
+
+test("未游玩的官方题库更新不会清除玩家题库的进行中游戏", () => {
+  const storage = new MemoryStorage();
+  const player = createPlayerCatalog("玩家题库", createDefaultCatalog(), storage);
+  selectPlayCatalog(player.id, storage);
+  const catalog = loadLocalCatalog(storage);
+  saveLocalGame(createLocalGame(catalog, "daily"), storage, catalog);
+
+  const storedLibrary = JSON.parse(storage.getItem("dongyiba:catalog-library:v2")!);
+  for (const officialId of Object.keys(storedLibrary.officialCatalogVersions)) {
+    storedLibrary.officialCatalogVersions[officialId] = "outdated";
+  }
+  storage.setItem("dongyiba:catalog-library:v2", JSON.stringify(storedLibrary));
+
+  loadCatalogLibrary(storage);
+  assert.notEqual(storage.getItem("dongyiba:games:v1"), null);
+});
+
 test("官方题库不能删除或直接写入，编辑副本不会改变官方内容", () => {
   const storage = new MemoryStorage();
   const official = loadCatalogLibrary(storage).catalogs[0];

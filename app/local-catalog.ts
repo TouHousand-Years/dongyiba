@@ -291,7 +291,15 @@ type StoredCatalogLibrary = {
   players: Array<{ id: string; name: string; catalog: LocalCatalog }>;
   playCatalogId: string;
   editCatalogId: string;
+  officialCatalogVersions: Record<string, string>;
 };
+
+function getOfficialCatalogVersions(): Record<string, string> {
+  return Object.fromEntries(bundledOfficialCatalogs.map((source) => [
+    officialCatalogId(source.path),
+    source.sha256,
+  ]));
+}
 
 function parseStoredCatalogLibrary(value: string | null): StoredCatalogLibrary | null {
   if (!value) return null;
@@ -309,6 +317,9 @@ function parseStoredCatalogLibrary(value: string | null): StoredCatalogLibrary |
       players: players as StoredCatalogLibrary["players"],
       playCatalogId: typeof parsed.playCatalogId === "string" ? parsed.playCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
       editCatalogId: typeof parsed.editCatalogId === "string" ? parsed.editCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
+      officialCatalogVersions: isRecord(parsed.officialCatalogVersions)
+        ? Object.fromEntries(Object.entries(parsed.officialCatalogVersions).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+        : {},
     };
   } catch {
     return null;
@@ -323,6 +334,7 @@ function persistCatalogLibrary(library: CatalogLibrary, storage: LocalStorageLik
       .map((item) => ({ id: item.id, name: item.name, catalog: sortCatalog(cloneCatalog(item.catalog)) })),
     playCatalogId: validIds.has(library.playCatalogId) ? library.playCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
     editCatalogId: validIds.has(library.editCatalogId) ? library.editCatalogId : DEFAULT_OFFICIAL_CATALOG_ID,
+    officialCatalogVersions: getOfficialCatalogVersions(),
   } satisfies StoredCatalogLibrary));
 }
 
@@ -334,8 +346,14 @@ export function loadCatalogLibrary(storage: LocalStorageLike | null = getBrowser
   if (!stored) {
     const legacy = parseCatalog(storage.getItem(CATALOG_STORAGE_KEY) ?? "");
     stored = legacy
-      ? { players: [{ id: "player:1", name: "我的题库", catalog: legacy }], playCatalogId: "player:1", editCatalogId: "player:1" }
-      : { players: [], playCatalogId: DEFAULT_OFFICIAL_CATALOG_ID, editCatalogId: DEFAULT_OFFICIAL_CATALOG_ID };
+      ? { players: [{ id: "player:1", name: "我的题库", catalog: legacy }], playCatalogId: "player:1", editCatalogId: "player:1", officialCatalogVersions: getOfficialCatalogVersions() }
+      : { players: [], playCatalogId: DEFAULT_OFFICIAL_CATALOG_ID, editCatalogId: DEFAULT_OFFICIAL_CATALOG_ID, officialCatalogVersions: getOfficialCatalogVersions() };
+  }
+
+  const currentOfficialVersions = getOfficialCatalogVersions();
+  const selectedOfficialVersion = currentOfficialVersions[stored.playCatalogId];
+  if (selectedOfficialVersion && stored.officialCatalogVersions[stored.playCatalogId] !== selectedOfficialVersion) {
+    storage.removeItem(ACTIVE_GAMES_STORAGE_KEY);
   }
 
   const catalogs: CatalogRecord[] = [

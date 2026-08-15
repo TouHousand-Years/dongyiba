@@ -20557,7 +20557,7 @@ export const bundledOfficialCatalogs: ReadonlyArray<BundledOfficialCatalog> = [
     name: "东方新作题库（新版测试版）",
     path: "db/东方新作题库（新版测试版）.csv",
     sha256: "11492fb6e7b0e02d18993428a7d0e78e88bc0c93d32fefff141c63a14fc58507",
-    gitCommitSha: "6ee2a02bb3c9937f151fa758a3a2caddce29703c",
+    gitCommitSha: "2ceba772ff6261a8412112518c8c569a5e1f3908",
     gitCommitDate: "2026-08-15",
     catalog: bundledCatalog1,
   },
