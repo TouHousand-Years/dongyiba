@@ -16,7 +16,12 @@ import {
   type LocalStorageLike,
 } from "./local-catalog";
 
-export type LocalGameMode = "daily" | "unlimited" | "custom";
+export type LocalGameMode = "daily" | "ten" | "unlimited" | "custom";
+
+export const TEN_MATCH_ROUNDS = 10;
+export const TEN_MATCH_INITIAL_MS = 10 * 60 * 1000;
+const TEN_MATCH_WRONG_PENALTIES_MS = [1, 2, 4, 8, 16].map((seconds) => seconds * 1000);
+const TEN_MATCH_CORRECT_BONUS_MS = 30 * 1000;
 
 export type LocalGuess = {
   id: number;
@@ -32,6 +37,14 @@ export type UnlimitedRound = {
   attempts: number;
   won: boolean;
   durationMs: number;
+};
+
+export type TenMatchRound = {
+  round: number;
+  answerCharacterId: number;
+  answer: string;
+  guesses: LocalGuess[];
+  won: boolean;
 };
 
 export type LocalGame = {
@@ -54,6 +67,9 @@ export type LocalGame = {
   unlimitedRound: number;
   unlimitedElapsedMs: number;
   unlimitedHistory: UnlimitedRound[];
+  tenMatchRound: number;
+  tenMatchAdjustmentMs: number;
+  tenMatchHistory: TenMatchRound[];
   guesses: LocalGuess[];
 };
 
@@ -78,6 +94,8 @@ export type GameRecord = {
   completed: boolean;
   won: boolean | null;
   durationMs: number;
+  tenMatchRounds?: TenMatchRound[];
+  tenMatchRemainingMs?: number;
 };
 
 export type TimingStats = {
@@ -87,7 +105,15 @@ export type TimingStats = {
 };
 
 export type LocalGuessResult =
-  | { ok: true; game: LocalGame; guess: LocalGuess; message: string; answer: string | null }
+  | {
+    ok: true;
+    game: LocalGame;
+    guess: LocalGuess;
+    message: string;
+    answer: string | null;
+    roundCompleted: boolean;
+    timeDeltaMs: number;
+  }
   | { ok: false; error: string };
 
 const GAME_STORAGE_KEY = "dongyiba:games:v1";
@@ -204,6 +230,9 @@ function createLocalGameWithAnswer(
     unlimitedRound: 1,
     unlimitedElapsedMs: 0,
     unlimitedHistory: [],
+    tenMatchRound: 1,
+    tenMatchAdjustmentMs: 0,
+    tenMatchHistory: [],
     guesses: [],
   };
 }
@@ -224,6 +253,15 @@ function isStoredGuess(value: unknown): value is StoredGuess {
   const guess = value as Partial<StoredGuess>;
   return Number.isInteger(guess.id) && typeof guess.name === "string" &&
     isOptionalTime(guess.guessedAt) && isOptionalTime(guess.elapsedMs) && Array.isArray(guess.feedback);
+}
+
+function isStoredTenMatchRound(value: unknown): value is TenMatchRound {
+  if (!value || typeof value !== "object") return false;
+  const round = value as Partial<TenMatchRound>;
+  return Number.isInteger(round.round) && Number(round.round) >= 1 && Number(round.round) <= TEN_MATCH_ROUNDS &&
+    Number.isInteger(round.answerCharacterId) && typeof round.answer === "string" &&
+    Array.isArray(round.guesses) && round.guesses.length > 0 && round.guesses.length <= 8 &&
+    round.guesses.every(isStoredGuess) && typeof round.won === "boolean";
 }
 
 function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: LocalCatalog): LocalGame | null {
@@ -256,10 +294,37 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
   }));
   const answerCharacterId = Number(stored.answerCharacterId);
   const attempts = guesses.length;
-  const completed = stored.completed === true || attempts >= 8;
-  const elapsedMs = typeof stored.elapsedMs === "number" && Number.isFinite(stored.elapsedMs) && stored.elapsedMs >= 0
+  const tenMatchRound = mode === "ten" && Number.isInteger(stored.tenMatchRound)
+    ? Math.min(TEN_MATCH_ROUNDS, Math.max(1, Number(stored.tenMatchRound)))
+    : 1;
+  const tenMatchAdjustmentMs = mode === "ten" && typeof stored.tenMatchAdjustmentMs === "number" && Number.isFinite(stored.tenMatchAdjustmentMs)
+    ? stored.tenMatchAdjustmentMs
+    : 0;
+  const tenMatchHistory = mode === "ten" && Array.isArray(stored.tenMatchHistory)
+    ? stored.tenMatchHistory.filter(isStoredTenMatchRound).map((round) => ({
+      ...round,
+      guesses: round.guesses.map((guess) => ({
+        ...guess,
+        guessedAt: guess.guessedAt ?? null,
+        elapsedMs: guess.elapsedMs ?? null,
+      })),
+    }))
+    : [];
+  const storedElapsedMs = typeof stored.elapsedMs === "number" && Number.isFinite(stored.elapsedMs) && stored.elapsedMs >= 0
     ? stored.elapsedMs
     : 0;
+  const storedTimerStartedAt = typeof stored.timerStartedAt === "number" && Number.isFinite(stored.timerStartedAt)
+    ? stored.timerStartedAt
+    : guesses.length > 0 ? Date.now() : null;
+  const expired = mode === "ten" && stored.completed !== true && storedTimerStartedAt !== null &&
+    TEN_MATCH_INITIAL_MS + tenMatchAdjustmentMs - (storedElapsedMs + Date.now() - storedTimerStartedAt) <= 0;
+  const roundCompleted = guesses.some((guess) => guess.id === answerCharacterId) || attempts >= 8;
+  const completed = mode === "ten"
+    ? stored.completed === true || expired || (tenMatchRound === TEN_MATCH_ROUNDS && roundCompleted)
+    : stored.completed === true || attempts >= 8;
+  const elapsedMs = expired && storedTimerStartedAt !== null
+    ? Math.max(0, storedElapsedMs + Date.now() - storedTimerStartedAt)
+    : storedElapsedMs;
   const timerStartedAt = !completed
     ? (typeof stored.timerStartedAt === "number" && Number.isFinite(stored.timerStartedAt)
       ? stored.timerStartedAt
@@ -288,7 +353,7 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
     attempts,
     completed,
     won: completed
-      ? (typeof stored.won === "boolean" ? stored.won : guesses.some((guess) => guess.id === answerCharacterId))
+      ? (expired ? false : typeof stored.won === "boolean" ? stored.won : guesses.some((guess) => guess.id === answerCharacterId))
       : null,
     timerStartedAt,
     elapsedMs,
@@ -302,12 +367,91 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
       ? Math.max(0, stored.unlimitedElapsedMs)
       : 0,
     unlimitedHistory,
+    tenMatchRound,
+    tenMatchAdjustmentMs,
+    tenMatchHistory,
     guesses,
   };
 }
 
 export function getElapsedMs(game: LocalGame, now = Date.now()): number {
   return Math.max(0, game.elapsedMs + (game.timerStartedAt === null ? 0 : now - game.timerStartedAt));
+}
+
+export function getTenMatchRemainingMs(game: LocalGame, now = Date.now()): number {
+  if (game.mode !== "ten") return 0;
+  return Math.max(0, TEN_MATCH_INITIAL_MS + game.tenMatchAdjustmentMs - getElapsedMs(game, now));
+}
+
+export function isTenMatchRoundComplete(game: LocalGame): boolean {
+  return game.mode === "ten" && (
+    game.guesses.some((guess) => guess.id === game.answerCharacterId) || game.attempts >= game.maxAttempts
+  );
+}
+
+function cloneGuess(guess: LocalGuess): LocalGuess {
+  return { ...guess, feedback: guess.feedback.map((item) => ({ ...item })) };
+}
+
+function toTenMatchRound(catalog: LocalCatalog, game: LocalGame): TenMatchRound {
+  return {
+    round: game.tenMatchRound,
+    answerCharacterId: game.answerCharacterId,
+    answer: getLocalAnswerName(catalog, game),
+    guesses: game.guesses.map(cloneGuess),
+    won: game.guesses.some((guess) => guess.id === game.answerCharacterId),
+  };
+}
+
+export type TenMatchAdvanceResult = {
+  game: LocalGame;
+  timeDeltaMs: number;
+  advancedRounds: number;
+};
+
+export function createNextTenMatchGame(
+  catalog: LocalCatalog,
+  previous: LocalGame,
+  now = Date.now(),
+): TenMatchAdvanceResult {
+  if (previous.mode !== "ten" || previous.completed || !isTenMatchRoundComplete(previous)) {
+    throw new Error("只有十番战中已结束的非末轮可以自动进入下一轮。");
+  }
+
+  let current = previous;
+  let timeDeltaMs = 0;
+  let advancedRounds = 0;
+  while (!current.completed && current.tenMatchRound < TEN_MATCH_ROUNDS && isTenMatchRoundComplete(current)) {
+    const carriedGuess = getLocalAnswerName(catalog, current);
+    const nextBase = createLocalGame(catalog, "ten", now);
+    const next: LocalGame = {
+      ...nextBase,
+      sessionId: current.sessionId,
+      createdAt: current.createdAt,
+      timerStartedAt: current.timerStartedAt,
+      elapsedMs: current.elapsedMs,
+      tenMatchRound: current.tenMatchRound + 1,
+      tenMatchAdjustmentMs: current.tenMatchAdjustmentMs,
+      tenMatchHistory: [...current.tenMatchHistory, toTenMatchRound(catalog, current)],
+    };
+    const carried = submitLocalGuess(catalog, next, carriedGuess, now);
+    if (!carried.ok) throw new Error(carried.error);
+    current = carried.game;
+    timeDeltaMs += carried.timeDeltaMs;
+    advancedRounds += 1;
+  }
+  return { game: current, timeDeltaMs, advancedRounds };
+}
+
+export function expireTenMatchGame(game: LocalGame, now = Date.now()): LocalGame {
+  if (game.mode !== "ten" || game.completed) return game;
+  return {
+    ...game,
+    completed: true,
+    won: false,
+    timerStartedAt: null,
+    elapsedMs: getElapsedMs(game, now),
+  };
 }
 
 export function createNextUnlimitedGame(catalog: LocalCatalog, previous: LocalGame, now = Date.now()): LocalGame {
@@ -422,7 +566,7 @@ export function loadActiveGameSessionIds(
     const parsed: unknown = parseStoredGameData(stored);
     if (!parsed || typeof parsed !== "object") return sessionIds;
     const games = parsed as Record<string, unknown>;
-    for (const mode of ["daily", "unlimited", "custom"] satisfies LocalGameMode[]) {
+    for (const mode of ["daily", "ten", "unlimited", "custom"] satisfies LocalGameMode[]) {
       const game = games[mode];
       if (game && typeof game === "object" && typeof (game as Partial<LocalGame>).sessionId === "string") {
         sessionIds.add((game as Partial<LocalGame>).sessionId!);
@@ -465,7 +609,7 @@ function isGameRecord(value: unknown): value is GameRecord {
     isOptionalTime(record.createdAt) && isOptionalTime(record.startedAt) &&
     isOptionalTime(record.updatedAt) && isOptionalTime(record.completedAt) &&
     typeof record.dayKey === "string" && Number.isInteger(record.challengeNumber) &&
-    (record.mode === "daily" || record.mode === "unlimited" || record.mode === "custom") && Number.isInteger(record.maxAttempts) &&
+    (record.mode === "daily" || record.mode === "ten" || record.mode === "unlimited" || record.mode === "custom") && Number.isInteger(record.maxAttempts) &&
     (record.unlimitedRunId === null || typeof record.unlimitedRunId === "string") &&
     Number.isInteger(record.unlimitedRound) && Number.isInteger(record.answerCharacterId) &&
     typeof record.answerName === "string" && Array.isArray(record.candidateNames) &&
@@ -474,7 +618,12 @@ function isGameRecord(value: unknown): value is GameRecord {
       isStoredGuess(guess) && guess.guessedAt !== undefined && guess.elapsedMs !== undefined
     )) && typeof record.completed === "boolean" &&
     (record.won === null || typeof record.won === "boolean") &&
-    typeof record.durationMs === "number" && Number.isFinite(record.durationMs) && record.durationMs >= 0;
+    typeof record.durationMs === "number" && Number.isFinite(record.durationMs) && record.durationMs >= 0 &&
+    (record.tenMatchRounds === undefined || (
+      Array.isArray(record.tenMatchRounds) && record.tenMatchRounds.every(isStoredTenMatchRound)
+    )) && (record.tenMatchRemainingMs === undefined || (
+      typeof record.tenMatchRemainingMs === "number" && Number.isFinite(record.tenMatchRemainingMs) && record.tenMatchRemainingMs >= 0
+    ));
 }
 
 export function loadGameRecords(
@@ -492,8 +641,15 @@ export function loadGameRecords(
 }
 
 function toGameRecord(game: LocalGame, catalog: LocalCatalog): GameRecord {
-  const firstGuess = game.guesses[0];
-  const lastGuess = game.guesses.at(-1);
+  const tenMatchRounds = game.mode === "ten"
+    ? [
+      ...game.tenMatchHistory,
+      ...(game.guesses.length ? [toTenMatchRound(catalog, game)] : []),
+    ]
+    : undefined;
+  const recordGuesses = tenMatchRounds?.flatMap((round) => round.guesses) ?? game.guesses;
+  const firstGuess = recordGuesses[0];
+  const lastGuess = recordGuesses.at(-1);
   return {
     schemaVersion: 1,
     sessionId: game.sessionId,
@@ -511,13 +667,12 @@ function toGameRecord(game: LocalGame, catalog: LocalCatalog): GameRecord {
     answerName: getLocalAnswerName(catalog, game),
     candidateNames: [...game.names],
     tags: game.tags.map((tag) => ({ ...tag })),
-    guesses: game.guesses.map((guess) => ({
-      ...guess,
-      feedback: guess.feedback.map((item) => ({ ...item })),
-    })),
+    guesses: recordGuesses.map(cloneGuess),
     completed: game.completed,
     won: game.won,
     durationMs: lastGuess?.elapsedMs ?? game.elapsedMs,
+    tenMatchRounds,
+    tenMatchRemainingMs: game.mode === "ten" ? getTenMatchRemainingMs(game) : undefined,
   };
 }
 
@@ -594,6 +749,9 @@ export function submitLocalGuess(
   now = Date.now(),
 ): LocalGuessResult {
   if (game.completed) return { ok: false, error: "本局已经结束，请开始下一局。" };
+  if (game.mode === "ten" && game.timerStartedAt !== null && getTenMatchRemainingMs(game, now) <= 0) {
+    return { ok: false, error: "十番战时间已到。" };
+  }
   const guessedCharacter = findCharacter(catalog, name);
   if (!guessedCharacter) return { ok: false, error: "题库中没有这位角色，请从候选列表中选择。" };
 
@@ -605,13 +763,27 @@ export function submitLocalGuess(
   const lost = attempts >= game.maxAttempts && !won;
   const startsTimer = game.guesses.length === 0 && game.timerStartedAt === null;
   const activeTimerStartedAt = startsTimer ? now : game.timerStartedAt;
-  const elapsedMs = won || lost
-    ? Math.max(0, game.elapsedMs + (activeTimerStartedAt === null ? 0 : now - activeTimerStartedAt))
-    : game.elapsedMs;
+  const timeDeltaMs = game.mode === "ten"
+    ? won
+      ? TEN_MATCH_CORRECT_BONUS_MS
+      : attempts <= 1
+        ? 0
+        : -TEN_MATCH_WRONG_PENALTIES_MS[Math.min(attempts - 2, TEN_MATCH_WRONG_PENALTIES_MS.length - 1)]
+    : 0;
+  const tenMatchAdjustmentMs = game.tenMatchAdjustmentMs + timeDeltaMs;
   const guessElapsedMs = Math.max(
     0,
     game.elapsedMs + (activeTimerStartedAt === null ? 0 : now - activeTimerStartedAt),
   );
+  const timedOut = game.mode === "ten" && TEN_MATCH_INITIAL_MS + tenMatchAdjustmentMs - guessElapsedMs <= 0;
+  const roundCompleted = won || lost;
+  const completed = game.mode === "ten"
+    ? timedOut || (game.tenMatchRound === TEN_MATCH_ROUNDS && roundCompleted)
+    : roundCompleted;
+  const allTenWon = game.mode === "ten" && game.tenMatchHistory.every((round) => round.won) && won;
+  const elapsedMs = completed
+    ? Math.max(0, game.elapsedMs + (activeTimerStartedAt === null ? 0 : now - activeTimerStartedAt))
+    : game.elapsedMs;
   const guess: LocalGuess = {
     id: guessedCharacter.id,
     name: guessedCharacter.name,
@@ -622,10 +794,11 @@ export function submitLocalGuess(
   const nextGame: LocalGame = {
     ...game,
     attempts,
-    completed: won || lost,
-    won: won || lost ? won : null,
-    timerStartedAt: won || lost ? null : activeTimerStartedAt,
+    completed,
+    won: completed ? (game.mode === "ten" ? !timedOut && allTenWon : won) : null,
+    timerStartedAt: completed ? null : activeTimerStartedAt,
     elapsedMs,
+    tenMatchAdjustmentMs,
     guesses: [...game.guesses, guess],
   };
 
@@ -633,11 +806,15 @@ export function submitLocalGuess(
     ok: true,
     game: nextGame,
     guess,
-    message: won
-      ? `正解！${answer.name} 现身了！`
-      : lost
-        ? `机会用完了，答案是 ${answer.name}。`
-        : `还有 ${game.maxAttempts - attempts} 次机会。`,
-    answer: won || lost ? answer.name : null,
+    message: timedOut
+      ? `时间到，十番战结束。当前答案是 ${answer.name}。`
+      : won
+        ? `正解！${answer.name} 现身了！`
+        : lost
+          ? `机会用完了，答案是 ${answer.name}。`
+          : `还有 ${game.maxAttempts - attempts} 次机会。`,
+    answer: completed ? answer.name : game.mode === "ten" ? null : roundCompleted ? answer.name : null,
+    roundCompleted,
+    timeDeltaMs,
   };
 }

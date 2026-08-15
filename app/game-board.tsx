@@ -2,12 +2,16 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  createNextTenMatchGame,
   createNextUnlimitedGame,
   createLocalGame,
   createSpecifiedLocalGame,
   discardLocalGame,
+  expireTenMatchGame,
   getElapsedMs,
   getLocalAnswerName,
+  getTenMatchRemainingMs,
+  isTenMatchRoundComplete,
   loadActiveGameSessionIds,
   loadGameCatalog,
   loadGameRecords,
@@ -16,6 +20,7 @@ import {
   recordCompletedTiming,
   saveLocalGame,
   submitLocalGuess,
+  TEN_MATCH_ROUNDS,
   type LocalGame,
   type LocalGameMode,
   type GameRecord,
@@ -55,6 +60,7 @@ export function GameBoard() {
   const catalogPickerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<LocalGame | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [timerPulse, setTimerPulse] = useState<{ kind: "bonus" | "penalty"; id: number } | null>(null);
   const [timingStats, setTimingStats] = useState<TimingStats>({
     completedSessionIds: [],
     winDurationsMs: [],
@@ -66,9 +72,12 @@ export function GameBoard() {
     try {
       const catalog = loadGameCatalog(nextMode);
       const restored = forceNew ? null : loadLocalGame(nextMode, catalog);
-      const nextGame = restored ?? (specifiedCharacterName
+      let nextGame = restored ?? (specifiedCharacterName
         ? createSpecifiedLocalGame(catalog, specifiedCharacterName)
         : createLocalGame(catalog, nextMode));
+      if (nextGame.mode === "ten" && !nextGame.completed && isTenMatchRoundComplete(nextGame)) {
+        nextGame = createNextTenMatchGame(catalog, nextGame).game;
+      }
       saveLocalGame(nextGame, undefined, catalog);
       setTimingStats(nextGame.completed ? recordCompletedTiming(nextGame) : loadTimingStats());
       setGame(nextGame);
@@ -81,7 +90,9 @@ export function GameBoard() {
           ? `本局已结束，答案是 ${getLocalAnswerName(catalog, nextGame)}。`
           : nextMode === "daily"
             ? "输入角色名，开始今天这一把。"
-            : "新角色已藏好。",
+            : nextMode === "ten"
+              ? "猯藏准备了十番变化，你能全部猜出吗？"
+              : "新角色已藏好。",
       );
     } catch (error) {
       setMessage(
@@ -136,9 +147,26 @@ export function GameBoard() {
 
   useEffect(() => {
     if (!game || game.timerStartedAt === null || game.completed) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 100);
+    const timer = window.setInterval(() => {
+      const nextNow = Date.now();
+      if (game.mode === "ten" && getTenMatchRemainingMs(game, nextNow) <= 0) {
+        const catalog = loadGameCatalog("ten");
+        const expired = expireTenMatchGame(game, nextNow);
+        saveLocalGame(expired, undefined, catalog);
+        setGame(expired);
+        setAnswer(getLocalAnswerName(catalog, expired));
+        setMessage(`时间到，十番战结束：猜出 ${expired.tenMatchHistory.filter((round) => round.won).length}/10 位。`);
+      }
+      setNow(nextNow);
+    }, 100);
     return () => window.clearInterval(timer);
   }, [game]);
+
+  useEffect(() => {
+    if (!timerPulse) return;
+    const timer = window.setTimeout(() => setTimerPulse(null), 720);
+    return () => window.clearTimeout(timer);
+  }, [timerPulse]);
 
   useEffect(() => {
     let discardedDailyGame = false;
@@ -203,13 +231,32 @@ export function GameBoard() {
         setMessage(result.error);
         return;
       }
-      setGame(result.game);
-      saveLocalGame(result.game, undefined, catalog);
-      if (result.game.completed) setTimingStats(recordCompletedTiming(result.game));
+      let nextGame = result.game;
+      let timeDeltaMs = result.timeDeltaMs;
+      if (nextGame.mode === "ten" && result.roundCompleted && !nextGame.completed) {
+        const advanced = createNextTenMatchGame(catalog, nextGame, Date.now());
+        nextGame = advanced.game;
+        timeDeltaMs += advanced.timeDeltaMs;
+      }
+      setGame(nextGame);
+      saveLocalGame(nextGame, undefined, catalog);
+      if (nextGame.completed) setTimingStats(recordCompletedTiming(nextGame));
       setNow(Date.now());
       setQuery("");
-      setMessage(result.message);
-      if (result.answer) setAnswer(result.answer);
+      if (timeDeltaMs !== 0) {
+        setTimerPulse({ kind: timeDeltaMs > 0 ? "bonus" : "penalty", id: Date.now() });
+      }
+      if (nextGame.mode === "ten" && result.roundCompleted) {
+        const wonRounds = nextGame.tenMatchHistory.filter((round) => round.won).length + (
+          nextGame.completed && nextGame.guesses.some((guess) => guess.id === nextGame.answerCharacterId) ? 1 : 0
+        );
+        setMessage(nextGame.completed
+          ? `十番战结束：猜出 ${wonRounds}/${TEN_MATCH_ROUNDS} 位。`
+          : `已自动进入第 ${nextGame.tenMatchRound}/${TEN_MATCH_ROUNDS} 局，并以上一局人物作为首猜。`);
+      } else {
+        setMessage(result.message);
+      }
+      if (nextGame.completed) setAnswer(getLocalAnswerName(catalog, nextGame));
     } catch {
       setMessage("这次猜测未能完成，请重试。");
     } finally {
@@ -221,7 +268,11 @@ export function GameBoard() {
   const attemptsLeft = Math.max(0, (game?.maxAttempts ?? 8) - guesses.length);
   const elapsedMs = game ? getElapsedMs(game, now) : 0;
   const totalElapsedMs = game ? game.unlimitedElapsedMs + elapsedMs : 0;
-  const timerVisible = Boolean(game && !(game.completed && game.won === false));
+  const tenMatchRemainingMs = game?.mode === "ten" ? getTenMatchRemainingMs(game, now) : 0;
+  const timerVisible = Boolean(game && (game.mode === "ten" || !(game.completed && game.won === false)));
+  const timerClassName = game?.mode === "ten"
+    ? `timer-strip countdown-timer${tenMatchRemainingMs < 30_000 && !game.completed ? " timer-low" : ""}${timerPulse ? ` timer-${timerPulse.kind}` : ""}`
+    : "timer-strip";
   const recentDurations = timingStats.winDurationsMs.slice(-10);
   const recentAttempts = timingStats.winAttempts.slice(-10);
   const average = (durations: number[]) => durations.length
@@ -286,7 +337,7 @@ export function GameBoard() {
       <div className="mist mist-one" />
       <div className="mist mist-two" />
       <header className="topbar">
-        <p className="challenge">每日挑战 #{game?.challengeNumber ?? "—"}</p>
+        <p className="challenge">{mode === "ten" ? `十番战 ${game?.tenMatchRound ?? 1}/${TEN_MATCH_ROUNDS}` : `每日挑战 #${game?.challengeNumber ?? "—"}`}</p>
         <div className="topbar-actions">
           <button
             className="theme-toggle"
@@ -315,15 +366,19 @@ export function GameBoard() {
       </section>
 
       <section className="status-strip" aria-label="今日挑战状态">
-        <span><b>{game?.names.length ?? "—"}</b> 位角色</span>
+        <span>{mode === "ten" ? <><b>{game?.tenMatchRound ?? 1}/{TEN_MATCH_ROUNDS}</b> 当前局</> : <><b>{game?.names.length ?? "—"}</b> 位角色</>}</span>
         <span><b>{game?.maxAttempts ?? 8}</b> 次机会</span>
         <span><b>{attemptsLeft}</b> 次剩余</span>
       </section>
 
       {game && timerVisible && (
-        <section className="timer-strip" aria-label="游戏计时" aria-live="off">
-          {isContinuousMode(mode) && <span><small>总用时</small><b>{formatDuration(totalElapsedMs)}</b></span>}
-          <span><small>{isContinuousMode(mode) ? "当前人物" : "本局用时"}</small><b>{formatDuration(elapsedMs)}</b></span>
+        <section className={timerClassName} aria-label={mode === "ten" ? "十番战倒计时" : "游戏计时"} aria-live="off">
+          {mode === "ten" ? (
+            <span><small>剩余时间</small><b>{formatDuration(tenMatchRemainingMs)}</b></span>
+          ) : <>
+            {isContinuousMode(mode) && <span><small>总用时</small><b>{formatDuration(totalElapsedMs)}</b></span>}
+            <span><small>{isContinuousMode(mode) ? "当前人物" : "本局用时"}</small><b>{formatDuration(elapsedMs)}</b></span>
+          </>}
         </section>
       )}
 
@@ -391,14 +446,14 @@ export function GameBoard() {
           </div>
         )}
         <div className="mode-switch" aria-label="选择游戏模式">
-          {(["daily", "unlimited", "custom"] as const).map((item) => (
+          {(["daily", "ten", "unlimited", "custom"] as const).map((item) => (
             <button
               key={item}
               className={mode === item ? "active" : ""}
               aria-pressed={mode === item}
               onClick={() => { setMode(item); start(item, true); }}
             >
-              {item === "daily" ? "每日挑战" : item === "unlimited" ? "无限模式" : "自定义模式"}
+              {item === "daily" ? "每日挑战" : item === "ten" ? "十番战" : item === "unlimited" ? "无限模式" : "自定义模式"}
             </button>
           ))}
         </div>
@@ -487,7 +542,7 @@ export function GameBoard() {
 
         {answer && (
           <button className="again-button" onClick={() => isContinuousMode(mode) ? nextUnlimitedRound() : start(mode, true)}>
-            {mode === "daily" ? "再看一遍" : "下一位角色"}
+            {mode === "daily" ? "再看一遍" : mode === "ten" ? "再战十番" : "下一位角色"}
           </button>
         )}
 
@@ -565,14 +620,28 @@ export function GameBoard() {
                         <span className={`history-result ${record.completed ? (record.won ? "won" : "lost") : isActive ? "active" : "abandoned"}`}>
                           {formatRecordResult(record, isActive)}
                         </span>
-                        <span className="history-answer">{record.completed ? record.answerName : "答案将在本局结束后显示"}</span>
+                        <span className="history-answer">{record.mode === "ten"
+                          ? `十番战 · 猜出 ${countTenMatchWins(record)}/${TEN_MATCH_ROUNDS} 位`
+                          : record.completed ? record.answerName : "答案将在本局结束后显示"}</span>
                         <span className="history-meta">
-                          {formatRecordMode(record.mode)} · {record.guesses.length} 次猜测 · {formatDuration(record.durationMs)}
+                          {formatRecordMode(record.mode)} · {record.guesses.length} 次猜测 · {record.mode === "ten"
+                            ? `剩余 ${formatDuration(record.tenMatchRemainingMs ?? 0)}`
+                            : formatDuration(record.durationMs)}
                         </span>
                         <time>{formatRecordTime(record.updatedAt ?? record.createdAt)}</time>
                       </summary>
                       <div className="history-details">
-                        {record.guesses.length ? (
+                        {record.mode === "ten" && record.tenMatchRounds?.length ? (
+                          <ol className="ten-match-record-rounds">
+                            {record.tenMatchRounds.map((round) => (
+                              <li key={round.round}>
+                                <span>第 {round.round} 局 · {round.answer}</span>
+                                <span>{round.won ? "已猜出" : round.guesses.length >= record.maxAttempts ? "次数用尽" : "未完成"}</span>
+                                <b>{round.guesses.length} 次</b>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : record.guesses.length ? (
                           <ol>
                             {record.guesses.map((guess, index) => {
                               const matches = guess.feedback.filter((item) => item.state === "match").length;
@@ -601,12 +670,20 @@ export function GameBoard() {
 }
 
 function formatRecordMode(mode: LocalGameMode) {
-  return mode === "daily" ? "每日挑战" : mode === "unlimited" ? "无限模式" : "自定义模式";
+  return mode === "daily" ? "每日挑战" : mode === "ten" ? "十番战" : mode === "unlimited" ? "无限模式" : "自定义模式";
 }
 
 function formatRecordResult(record: GameRecord, isActive: boolean) {
+  if (record.mode === "ten") {
+    if (!record.completed) return isActive ? "进行中" : "已放弃";
+    return record.won ? "全部猜出" : "挑战结束";
+  }
   if (!record.completed) return isActive ? "进行中" : "已放弃";
   return record.won ? "已猜中" : "未猜出";
+}
+
+function countTenMatchWins(record: GameRecord) {
+  return record.tenMatchRounds?.filter((round) => round.won).length ?? 0;
 }
 
 function formatRecordTime(timestamp: number | null) {

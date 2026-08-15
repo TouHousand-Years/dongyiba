@@ -223,6 +223,14 @@ h1 { margin: 0; font-size: clamp(44px, 8vw, 72px); font-weight: 700; letter-spac
 .timer-strip span + span { border-left: 1px solid #e5d9d4; }
 .timer-strip small { display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; letter-spacing: .1em; }
 .timer-strip b { color: var(--red-dark); font-size: 18px; font-variant-numeric: tabular-nums; }
+.countdown-timer b { min-width: 94px; transition: color .16s ease, text-shadow .16s ease; }
+.countdown-timer.timer-bonus b { color: #27834a; text-shadow: 0 0 12px rgba(39,131,74,.32); }
+.countdown-timer.timer-penalty b { color: #d1203b; text-shadow: 0 0 12px rgba(209,32,59,.32); }
+.countdown-timer.timer-low b { animation: ten-match-low-time .72s ease-in-out infinite alternate; }
+@keyframes ten-match-low-time {
+  from { color: var(--red-dark); text-shadow: 0 0 0 rgba(209,32,59,0); }
+  to { color: #ff173d; text-shadow: 0 0 15px rgba(255,23,61,.72); }
+}
 .play-layout { position: relative; z-index: 1; max-width: 1104px; margin: auto; }
 .play-layout.with-stats { max-width: 1384px; display: grid; grid-template-columns: minmax(0, 1012px) 260px; gap: 18px; align-items: start; }
 .game-card {

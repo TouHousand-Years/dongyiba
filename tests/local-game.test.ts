@@ -17,11 +17,14 @@ import {
   type LocalCatalog,
 } from "../app/local-catalog";
 import {
+  createNextTenMatchGame,
   createLocalGame,
   createNextUnlimitedGame,
   createSpecifiedLocalGame,
   discardLocalGame,
+  expireTenMatchGame,
   getElapsedMs,
+  getTenMatchRemainingMs,
   loadActiveGameSessionIds,
   loadGameCatalog,
   loadGameRecords,
@@ -30,6 +33,8 @@ import {
   recordCompletedTiming,
   saveLocalGame,
   submitLocalGuess,
+  TEN_MATCH_INITIAL_MS,
+  TEN_MATCH_ROUNDS,
 } from "../app/local-game";
 import {
   exportCatalogCsv,
@@ -88,13 +93,14 @@ test("标准模式题库固定指向新版测试版，而不是默认顺序中�
   assert.notDeepEqual(standard, legacyDefault);
 });
 
-test("每日与无限模式忽略玩家选择，自定义模式使用玩家选择的题库", () => {
+test("每日、十番战与无限模式忽略玩家选择，自定义模式使用玩家选择的题库", () => {
   const storage = new MemoryStorage();
   const playerCatalog = applyCatalogMutation(createDefaultCatalog(), { action: "saveTag", name: "玩家专属标签" });
   const player = createPlayerCatalog("玩家题库", playerCatalog, storage);
   selectPlayCatalog(player.id, storage);
 
   assert.equal(loadGameCatalog("daily", storage).tags.some((tag) => tag.name === "玩家专属标签"), false);
+  assert.equal(loadGameCatalog("ten", storage).tags.some((tag) => tag.name === "玩家专属标签"), false);
   assert.equal(loadGameCatalog("unlimited", storage).tags.some((tag) => tag.name === "玩家专属标签"), false);
   assert.equal(loadGameCatalog("custom", storage).tags.some((tag) => tag.name === "玩家专属标签"), true);
 });
@@ -275,6 +281,126 @@ test("计时在第一次有效猜测后开始，并在猜中时冻结", () => {
   assert.equal(won.game.timerStartedAt, null);
   assert.equal(won.game.elapsedMs, 3_000);
   assert.equal(getElapsedMs(won.game, 99_000), 3_000);
+});
+
+test("十番战首猜不扣时，后续猜错按 1/2/4/8/16 秒扣时，猜对奖励 30 秒", () => {
+  const catalog = createDefaultCatalog();
+  const answer = catalog.characters.find((character) => character.active)!;
+  const wrong = catalog.characters.filter((character) => character.active && character.id !== answer.id).slice(0, 8);
+  let game = { ...createLocalGame(catalog, "ten", 500), answerCharacterId: answer.id };
+
+  const first = submitLocalGuess(catalog, game, wrong[0].name, 1_000);
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  game = first.game;
+  assert.equal(first.timeDeltaMs, 0);
+  assert.equal(getTenMatchRemainingMs(game, 1_000), TEN_MATCH_INITIAL_MS);
+
+  const expectedPenalties = [-1_000, -2_000, -4_000, -8_000, -16_000, -16_000, -16_000];
+  for (const [index, penalty] of expectedPenalties.entries()) {
+    const result = submitLocalGuess(catalog, game, wrong[index + 1].name, 2_000 + index * 1_000);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.timeDeltaMs, penalty);
+    game = result.game;
+  }
+
+  assert.equal(game.attempts, 8);
+  assert.equal(game.completed, false);
+  assert.equal(getTenMatchRemainingMs(game, 8_000), TEN_MATCH_INITIAL_MS - 70_000);
+
+  const bonusGame = { ...createLocalGame(catalog, "ten", 500), answerCharacterId: answer.id };
+  const bonusFirst = submitLocalGuess(catalog, bonusGame, wrong[0].name, 1_000);
+  assert.equal(bonusFirst.ok, true);
+  if (!bonusFirst.ok) return;
+  const won = submitLocalGuess(catalog, bonusFirst.game, answer.name, 2_000);
+  assert.equal(won.ok, true);
+  if (!won.ok) return;
+  assert.equal(won.timeDeltaMs, 30_000);
+  assert.equal(won.roundCompleted, true);
+  assert.equal(won.game.completed, false);
+  assert.equal(won.game.timerStartedAt, 1_000);
+  assert.equal(getTenMatchRemainingMs(won.game, 2_000), TEN_MATCH_INITIAL_MS + 29_000);
+});
+
+test("十番战自动用上一局人物作为下一局首猜，且首猜错误不扣时", () => {
+  const catalog = createDefaultCatalog();
+  const characters = catalog.characters.filter((character) => character.active);
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    const firstGame = { ...createLocalGame(catalog, "ten", 500), answerCharacterId: characters[1].id };
+    const won = submitLocalGuess(catalog, firstGame, characters[1].name, 1_000);
+    assert.equal(won.ok, true);
+    if (!won.ok) return;
+
+    const advanced = createNextTenMatchGame(catalog, won.game, 2_000);
+    assert.equal(advanced.game.sessionId, firstGame.sessionId);
+    assert.equal(advanced.game.tenMatchRound, 2);
+    assert.equal(advanced.game.guesses.length, 1);
+    assert.equal(advanced.game.guesses[0].name, characters[1].name);
+    assert.equal(advanced.game.tenMatchHistory.length, 1);
+    assert.equal(advanced.game.tenMatchHistory[0].answer, characters[1].name);
+    assert.equal(advanced.timeDeltaMs, 0);
+    assert.equal(advanced.game.timerStartedAt, 1_000);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("十番战恰好进行 10 局，并在历史中作为 1 局保存", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  const characters = catalog.characters.filter((character) => character.active);
+  const originalRandom = Math.random;
+  let nextAnswerIndex = 1;
+  Math.random = () => (nextAnswerIndex + 0.1) / characters.length;
+  try {
+    let game = { ...createLocalGame(catalog, "ten", 500), answerCharacterId: characters[0].id };
+    const sessionId = game.sessionId;
+    for (let round = 1; round <= TEN_MATCH_ROUNDS; round += 1) {
+      const answer = catalog.characters.find((character) => character.id === game.answerCharacterId)!;
+      const won = submitLocalGuess(catalog, game, answer.name, 1_000 + round * 1_000);
+      assert.equal(won.ok, true);
+      if (!won.ok) return;
+      game = won.game;
+      if (round < TEN_MATCH_ROUNDS) {
+        nextAnswerIndex = answer.id === characters[0].id ? 1 : 0;
+        game = createNextTenMatchGame(catalog, game, 1_500 + round * 1_000).game;
+        assert.equal(game.tenMatchRound, round + 1);
+      }
+    }
+
+    assert.equal(game.completed, true);
+    assert.equal(game.won, true);
+    assert.equal(game.tenMatchRound, TEN_MATCH_ROUNDS);
+    assert.equal(game.tenMatchHistory.length, TEN_MATCH_ROUNDS - 1);
+    assert.equal(game.sessionId, sessionId);
+    saveLocalGame(game, storage, catalog);
+    const records = loadGameRecords(storage);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].sessionId, sessionId);
+    assert.equal(records[0].mode, "ten");
+    assert.equal(records[0].tenMatchRounds?.length, TEN_MATCH_ROUNDS);
+    assert.equal(records[0].tenMatchRounds?.every((round) => round.won), true);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("十番战倒计时归零后结束整组会话", () => {
+  const catalog = createDefaultCatalog();
+  const game = createLocalGame(catalog, "ten", 500);
+  const wrong = catalog.characters.find((character) => character.active && character.id !== game.answerCharacterId)!;
+  const first = submitLocalGuess(catalog, game, wrong.name, 1_000);
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+
+  const expired = expireTenMatchGame(first.game, 1_000 + TEN_MATCH_INITIAL_MS);
+  assert.equal(expired.completed, true);
+  assert.equal(expired.won, false);
+  assert.equal(expired.timerStartedAt, null);
+  assert.equal(getTenMatchRemainingMs(expired, 99_999_999), 0);
 });
 
 test("退出每日挑战时放弃当局，但不影响无限模式存档", () => {

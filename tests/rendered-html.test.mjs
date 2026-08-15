@@ -14,6 +14,7 @@ test("玩家首页使用真实游戏组件和正式元数据", async () => {
   assert.match(layout, /东一把｜猜东方 Project 角色/);
   assert.match(layout, /og\.png/);
   assert.match(game, /每日挑战/);
+  assert.match(game, /十番战/);
   assert.match(game, /无限模式/);
   assert.match(game, /自定义模式/);
   assert.doesNotMatch(`${page}${layout}${game}`, /无需登录|无需联网|本地模式|本机浏览器|当前浏览器|本地离线/);
@@ -26,6 +27,10 @@ test("玩家首页使用真实游戏组件和正式元数据", async () => {
   assert.match(updateCenter, /官方题库有更新/);
   assert.match(updateCenter, /当前题库基线.*DEFAULT_CATALOG_VERSION/);
   assert.match(game, /document\.documentElement\.dataset\.theme = pageTheme/);
+  assert.match(game, /\["daily", "ten", "unlimited", "custom"\]/);
+  assert.match(game, /猯藏准备了十番变化，你能全部猜出吗？/);
+  assert.match(game, /getTenMatchRemainingMs/);
+  assert.match(styles, /\.countdown-timer\.timer-low b/);
   assert.match(styles, /html\[data-theme="flandre"\] \.update-panel/);
   assert.match(styles, /\.history-list::\-webkit-scrollbar-thumb/);
   assert.match(styles, /scrollbar-color:\s*var\(--red\)\s+var\(--paper-deep\)/);
