@@ -4,6 +4,7 @@ import {
   applyCatalogMutation,
   copyCatalog,
   createCloseMatchCatalog,
+  createStandardGameCatalog,
   createPlayerCatalog,
   createDefaultCatalog,
   deletePlayerCatalog,
@@ -20,6 +21,7 @@ import {
   createNextUnlimitedGame,
   discardLocalGame,
   getElapsedMs,
+  loadGameCatalog,
   loadGameRecords,
   loadLocalGame,
   loadTimingStats,
@@ -73,6 +75,26 @@ test("默认题库可以在本地存储中读写", () => {
   assert.equal(loaded.tags.find((item) => item.name === "种族")?.kind, "category-multi");
   assert.equal(loaded.tags.find((item) => item.name === "所属地点")?.kind, "category-multi");
   assert.deepEqual(loaded.characters.find((item) => item.name === "驹草山如")?.aliases, ["驹草太夫"]);
+});
+
+test("标准模式题库固定指向新版测试版，而不是默认顺序中的首个题库", () => {
+  const standard = createStandardGameCatalog();
+  const beta = createCloseMatchCatalog();
+  const legacyDefault = createDefaultCatalog();
+
+  assert.deepEqual(standard, beta);
+  assert.notDeepEqual(standard, legacyDefault);
+});
+
+test("每日与无限模式忽略玩家选择，自定义模式使用玩家选择的题库", () => {
+  const storage = new MemoryStorage();
+  const playerCatalog = applyCatalogMutation(createDefaultCatalog(), { action: "saveTag", name: "玩家专属标签" });
+  const player = createPlayerCatalog("玩家题库", playerCatalog, storage);
+  selectPlayCatalog(player.id, storage);
+
+  assert.equal(loadGameCatalog("daily", storage).tags.some((tag) => tag.name === "玩家专属标签"), false);
+  assert.equal(loadGameCatalog("unlimited", storage).tags.some((tag) => tag.name === "玩家专属标签"), false);
+  assert.equal(loadGameCatalog("custom", storage).tags.some((tag) => tag.name === "玩家专属标签"), true);
 });
 
 test("题库集合将官方题库排在玩家题库之前并分别保存游玩与编辑选择", () => {
@@ -365,7 +387,7 @@ test("进入无限模式下一轮后仍保留上一局的完整日志", () => {
   assert.equal(records[1].unlimitedRound, 2);
 });
 
-test("旧版明文游戏存档仍可读取，并在下次保存时转为混淆格式", () => {
+test("旧无限模式存档迁移到自定义模式，并在下次保存时转为混淆格式", () => {
   const catalog = createDefaultCatalog();
   const storage = new MemoryStorage();
   const game = createLocalGame(catalog, "unlimited");
@@ -384,10 +406,12 @@ test("旧版明文游戏存档仍可读取，并在下次保存时转为混淆�
     unlimited: { ...legacyGame, guesses: [legacyGuess] },
   }));
 
-  const restored = loadLocalGame("unlimited", catalog, storage);
+  const restored = loadLocalGame("custom", catalog, storage);
   assert.equal(restored?.guesses[0].guessedAt, null);
   assert.equal(restored?.guesses[0].elapsedMs, null);
   assert.equal(restored?.createdAt, null);
+  assert.equal(restored?.mode, "custom");
+  assert.equal(loadLocalGame("unlimited", catalog, storage), null);
   saveLocalGame(restored!, storage, catalog);
   assert.match(storage.getItem("dongyiba:games:v1")!, /^dyb-obf-v1:/);
   assert.equal(loadGameRecords(storage)[0].answerName, answer.name);
@@ -437,6 +461,20 @@ test("无限模式下一轮会保留本次游戏的累计用时与前轮记录",
     won: true,
     durationMs: 5_000,
   }]);
+});
+
+test("自定义模式保留原无限模式的连续轮次行为", () => {
+  const catalog = createDefaultCatalog();
+  const game = createLocalGame(catalog, "custom");
+  const answer = catalog.characters.find((item) => item.id === game.answerCharacterId)!;
+  const won = submitLocalGuess(catalog, game, answer.name, 1_000);
+  assert.equal(won.ok, true);
+  if (!won.ok) return;
+
+  const next = createNextUnlimitedGame(catalog, won.game, 2_000);
+  assert.equal(next.mode, "custom");
+  assert.equal(next.unlimitedRound, 2);
+  assert.equal(next.unlimitedRunId, game.unlimitedRunId);
 });
 
 test("无限模式生涯计时只统计成功对局，且同一局不会重复记录", () => {

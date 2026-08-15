@@ -70,9 +70,17 @@ export type CatalogMutation =
 const CATALOG_STORAGE_KEY = "dongyiba:catalog:v1";
 const CATALOG_LIBRARY_STORAGE_KEY = "dongyiba:catalog-library:v2";
 const ACTIVE_GAMES_STORAGE_KEY = "dongyiba:games:v1";
+export const STANDARD_GAME_CATALOG_NAME = "东方新作题库（新版测试版）";
+
 function getBundledOfficialCatalog(index: number) {
   const source = bundledOfficialCatalogs[index];
   if (!source) throw new Error("没有可用的内置官方题库。");
+  return source;
+}
+
+function getBundledOfficialCatalogByName(name: string) {
+  const source = bundledOfficialCatalogs.find((catalog) => catalog.name === name);
+  if (!source) throw new Error(`没有找到内置官方题库“${name}”。`);
   return source;
 }
 
@@ -126,6 +134,10 @@ export function createDefaultCatalog(): LocalCatalog {
 
 export function createCloseMatchCatalog(): LocalCatalog {
   return createBundledCatalog(getBundledOfficialCatalog(1).catalog);
+}
+
+export function createStandardGameCatalog(): LocalCatalog {
+  return createBundledCatalog(getBundledOfficialCatalogByName(STANDARD_GAME_CATALOG_NAME).catalog);
 }
 
 function getBrowserStorage(): LocalStorageLike | null {

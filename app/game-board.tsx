@@ -7,6 +7,7 @@ import {
   discardLocalGame,
   getElapsedMs,
   getLocalAnswerName,
+  loadGameCatalog,
   loadLocalGame,
   loadTimingStats,
   recordCompletedTiming,
@@ -18,7 +19,6 @@ import {
 } from "./local-game";
 import {
   loadCatalogLibrary,
-  loadLocalCatalog,
   selectPlayCatalog,
   type CatalogRecord,
 } from "./local-catalog";
@@ -26,6 +26,11 @@ import {
 type PageTheme = "dong" | "flandre";
 
 const THEME_STORAGE_KEY = "dongyiba:theme:v1";
+const CONTINUOUS_MODES: LocalGameMode[] = ["unlimited", "custom"];
+
+function isContinuousMode(mode: LocalGameMode) {
+  return CONTINUOUS_MODES.includes(mode);
+}
 
 export function GameBoard() {
   const [game, setGame] = useState<LocalGame | null>(null);
@@ -51,7 +56,7 @@ export function GameBoard() {
   function start(nextMode: LocalGameMode = mode, forceNew = false) {
     setBusy(true);
     try {
-      const catalog = loadLocalCatalog();
+      const catalog = loadGameCatalog(nextMode);
       const restored = forceNew ? null : loadLocalGame(nextMode, catalog);
       const nextGame = restored ?? createLocalGame(catalog, nextMode);
       saveLocalGame(nextGame, undefined, catalog);
@@ -166,7 +171,7 @@ export function GameBoard() {
     if (!game || !query.trim() || answer || busy) return;
     setBusy(true);
     try {
-      const catalog = loadLocalCatalog();
+      const catalog = loadGameCatalog(game.mode);
       const result = submitLocalGuess(catalog, game, query, Date.now());
       if (!result.ok) {
         setMessage(result.error);
@@ -198,10 +203,10 @@ export function GameBoard() {
     : null;
 
   function nextUnlimitedRound() {
-    if (!game || game.mode !== "unlimited" || !game.completed) return;
+    if (!game || !isContinuousMode(game.mode) || !game.completed) return;
     setBusy(true);
     try {
-      const catalog = loadLocalCatalog();
+      const catalog = loadGameCatalog(game.mode);
       const nextGame = createNextUnlimitedGame(catalog, game);
       saveLocalGame(nextGame, undefined, catalog);
       setGame(nextGame);
@@ -229,7 +234,7 @@ export function GameBoard() {
     if (catalogId === playCatalogId) return;
     selectPlayCatalog(catalogId);
     setPlayCatalogId(catalogId);
-    start(mode, true);
+    start("custom", true);
   }
 
   const isFlandreTheme = pageTheme === "flandre";
@@ -275,56 +280,58 @@ export function GameBoard() {
 
       {game && timerVisible && (
         <section className="timer-strip" aria-label="游戏计时" aria-live="off">
-          {mode === "unlimited" && <span><small>总用时</small><b>{formatDuration(totalElapsedMs)}</b></span>}
-          <span><small>{mode === "unlimited" ? "当前人物" : "本局用时"}</small><b>{formatDuration(elapsedMs)}</b></span>
+          {isContinuousMode(mode) && <span><small>总用时</small><b>{formatDuration(totalElapsedMs)}</b></span>}
+          <span><small>{isContinuousMode(mode) ? "当前人物" : "本局用时"}</small><b>{formatDuration(elapsedMs)}</b></span>
         </section>
       )}
 
-      <div className={`play-layout ${mode === "unlimited" ? "with-stats" : ""}`}>
+      <div className={`play-layout ${isContinuousMode(mode) ? "with-stats" : ""}`}>
       <section className="game-card" aria-label="东一把游戏挑战">
-        <div
-          className="game-catalog-picker"
-          ref={catalogPickerRef}
-          onKeyDown={(event) => { if (event.key === "Escape") setShowCatalogMenu(false); }}
-        >
-          <span>游玩题库</span>
-          <div className="catalog-dropdown">
-            <button
-              className="catalog-dropdown-trigger"
-              type="button"
-              aria-haspopup="listbox"
-              aria-expanded={showCatalogMenu}
-              disabled={busy || catalogChoices.length === 0}
-              onClick={() => setShowCatalogMenu((visible) => !visible)}
-            >
-              <span>{selectedCatalog?.official ? "官方 · " : ""}{selectedCatalog?.name ?? "选择题库"}</span>
-              <i aria-hidden="true" />
-            </button>
-            {showCatalogMenu && (
-              <div className="catalog-dropdown-menu" role="listbox" aria-label="游玩题库">
-                {catalogChoices.map((catalog) => (
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={catalog.id === playCatalogId}
-                    className={catalog.id === playCatalogId ? "selected" : ""}
-                    key={catalog.id}
-                    onClick={() => changePlayCatalog(catalog.id)}
-                  >{catalog.official ? "官方 · " : ""}{catalog.name}</button>
-                ))}
-              </div>
-            )}
+        {mode === "custom" && (
+          <div
+            className="game-catalog-picker"
+            ref={catalogPickerRef}
+            onKeyDown={(event) => { if (event.key === "Escape") setShowCatalogMenu(false); }}
+          >
+            <span>游玩题库</span>
+            <div className="catalog-dropdown">
+              <button
+                className="catalog-dropdown-trigger"
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={showCatalogMenu}
+                disabled={busy || catalogChoices.length === 0}
+                onClick={() => setShowCatalogMenu((visible) => !visible)}
+              >
+                <span>{selectedCatalog?.official ? "官方 · " : ""}{selectedCatalog?.name ?? "选择题库"}</span>
+                <i aria-hidden="true" />
+              </button>
+              {showCatalogMenu && (
+                <div className="catalog-dropdown-menu" role="listbox" aria-label="游玩题库">
+                  {catalogChoices.map((catalog) => (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={catalog.id === playCatalogId}
+                      className={catalog.id === playCatalogId ? "selected" : ""}
+                      key={catalog.id}
+                      onClick={() => changePlayCatalog(catalog.id)}
+                    >{catalog.official ? "官方 · " : ""}{catalog.name}</button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <div className="mode-switch" aria-label="选择游戏模式">
-          {(["daily", "unlimited"] as const).map((item) => (
+          {(["daily", "unlimited", "custom"] as const).map((item) => (
             <button
               key={item}
               className={mode === item ? "active" : ""}
               aria-pressed={mode === item}
               onClick={() => { setMode(item); start(item, true); }}
             >
-              {item === "daily" ? "每日挑战" : "无限模式"}
+              {item === "daily" ? "每日挑战" : item === "unlimited" ? "无限模式" : "自定义模式"}
             </button>
           ))}
         </div>
@@ -412,7 +419,7 @@ export function GameBoard() {
         )}
 
         {answer && (
-          <button className="again-button" onClick={() => mode === "unlimited" ? nextUnlimitedRound() : start(mode, true)}>
+          <button className="again-button" onClick={() => isContinuousMode(mode) ? nextUnlimitedRound() : start(mode, true)}>
             {mode === "daily" ? "再看一遍" : "下一位角色"}
           </button>
         )}
@@ -424,8 +431,8 @@ export function GameBoard() {
         </div>
       </section>
 
-      {mode === "unlimited" && game && (
-        <aside className="timing-panel" aria-label="无限模式用时统计">
+      {isContinuousMode(mode) && game && (
+        <aside className="timing-panel" aria-label={`${mode === "custom" ? "自定义" : "无限"}模式用时统计`}>
           <p className="eyebrow">Run history</p>
           <h2>本次游戏</h2>
           {game.unlimitedHistory.length ? (

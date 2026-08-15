@@ -8,6 +8,7 @@ import {
 import {
   getActiveCharacters,
   getActiveTags,
+  createStandardGameCatalog,
   loadLocalCatalog,
   toTagDefinitions,
   type LocalCatalog,
@@ -15,7 +16,7 @@ import {
   type LocalStorageLike,
 } from "./local-catalog";
 
-export type LocalGameMode = "daily" | "unlimited";
+export type LocalGameMode = "daily" | "unlimited" | "custom";
 
 export type LocalGuess = {
   id: number;
@@ -93,6 +94,17 @@ const GAME_RECORDS_STORAGE_KEY = "dongyiba:game-records:v1";
 const TIMING_STORAGE_KEY = "dongyiba:timing:v1";
 const OBFUSCATED_STORAGE_PREFIX = "dyb-obf-v1:";
 const OBFUSCATION_KEY = new TextEncoder().encode("dongyiba-local-record");
+
+function isContinuousMode(mode: LocalGameMode): boolean {
+  return mode === "unlimited" || mode === "custom";
+}
+
+export function loadGameCatalog(
+  mode: LocalGameMode,
+  storage: LocalStorageLike | null = getBrowserStorage(),
+): LocalCatalog {
+  return mode === "custom" ? loadLocalCatalog(storage) : createStandardGameCatalog();
+}
 
 function obfuscateGameData(value: unknown): string {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
@@ -176,7 +188,7 @@ export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode, now 
     won: null,
     timerStartedAt: null,
     elapsedMs: 0,
-    unlimitedRunId: mode === "unlimited" ? newSessionId() : null,
+    unlimitedRunId: isContinuousMode(mode) ? newSessionId() : null,
     unlimitedRound: 1,
     unlimitedElapsedMs: 0,
     unlimitedHistory: [],
@@ -267,13 +279,13 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
       : null,
     timerStartedAt,
     elapsedMs,
-    unlimitedRunId: mode === "unlimited"
+    unlimitedRunId: isContinuousMode(mode)
       ? (typeof stored.unlimitedRunId === "string" ? stored.unlimitedRunId : stored.sessionId)
       : null,
-    unlimitedRound: mode === "unlimited" && Number.isInteger(stored.unlimitedRound)
+    unlimitedRound: isContinuousMode(mode) && Number.isInteger(stored.unlimitedRound)
       ? Math.max(1, Number(stored.unlimitedRound))
       : 1,
-    unlimitedElapsedMs: mode === "unlimited" && typeof stored.unlimitedElapsedMs === "number" && Number.isFinite(stored.unlimitedElapsedMs)
+    unlimitedElapsedMs: isContinuousMode(mode) && typeof stored.unlimitedElapsedMs === "number" && Number.isFinite(stored.unlimitedElapsedMs)
       ? Math.max(0, stored.unlimitedElapsedMs)
       : 0,
     unlimitedHistory,
@@ -286,10 +298,10 @@ export function getElapsedMs(game: LocalGame, now = Date.now()): number {
 }
 
 export function createNextUnlimitedGame(catalog: LocalCatalog, previous: LocalGame, now = Date.now()): LocalGame {
-  if (previous.mode !== "unlimited" || !previous.completed) {
-    throw new Error("只有已结束的无限模式对局可以进入下一轮。");
+  if (!isContinuousMode(previous.mode) || !previous.completed) {
+    throw new Error("只有已结束的无限或自定义模式对局可以进入下一轮。");
   }
-  const next = createLocalGame(catalog, "unlimited", now);
+  const next = createLocalGame(catalog, previous.mode, now);
   const answer = getLocalAnswerName(catalog, previous);
   return {
     ...next,
@@ -343,7 +355,7 @@ export function recordCompletedTiming(
 ): TimingStats {
   const stats = loadTimingStats(storage);
   if (
-    !storage || game.mode !== "unlimited" || !game.completed ||
+    !storage || !isContinuousMode(game.mode) || !game.completed ||
     stats.completedSessionIds.includes(game.sessionId)
   ) return stats;
   const next = {
@@ -370,7 +382,16 @@ export function loadLocalGame(
     if (!stored) return null;
     const parsed: unknown = parseStoredGameData(stored);
     if (!parsed || typeof parsed !== "object") return null;
-    const saved = (parsed as Record<string, unknown>)[mode];
+    const games = parsed as Record<string, unknown>;
+    if (games.schemaVersion !== 2) {
+      if (!games.custom && games.unlimited && typeof games.unlimited === "object") {
+        games.custom = { ...(games.unlimited as LocalGame), mode: "custom" };
+        delete games.unlimited;
+      }
+      games.schemaVersion = 2;
+      storage.setItem(GAME_STORAGE_KEY, obfuscateGameData(games));
+    }
+    const saved = games[mode];
     return normalizeStoredGame(saved, mode, catalog);
   } catch {
     return null;
@@ -408,7 +429,7 @@ function isGameRecord(value: unknown): value is GameRecord {
     isOptionalTime(record.createdAt) && isOptionalTime(record.startedAt) &&
     isOptionalTime(record.updatedAt) && isOptionalTime(record.completedAt) &&
     typeof record.dayKey === "string" && Number.isInteger(record.challengeNumber) &&
-    (record.mode === "daily" || record.mode === "unlimited") && Number.isInteger(record.maxAttempts) &&
+    (record.mode === "daily" || record.mode === "unlimited" || record.mode === "custom") && Number.isInteger(record.maxAttempts) &&
     (record.unlimitedRunId === null || typeof record.unlimitedRunId === "string") &&
     Number.isInteger(record.unlimitedRound) && Number.isInteger(record.answerCharacterId) &&
     typeof record.answerName === "string" && Array.isArray(record.candidateNames) &&
@@ -488,6 +509,13 @@ export function saveLocalGame(
     }
   } catch {
     saved = {};
+  }
+  if (saved.schemaVersion !== 2) {
+    if (!saved.custom && saved.unlimited && typeof saved.unlimited === "object") {
+      saved.custom = { ...(saved.unlimited as LocalGame), mode: "custom" };
+      delete saved.unlimited;
+    }
+    saved.schemaVersion = 2;
   }
   saved[game.mode] = game;
   storage.setItem(GAME_STORAGE_KEY, obfuscateGameData(saved));
