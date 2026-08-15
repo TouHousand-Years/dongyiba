@@ -377,6 +377,30 @@ export function loadLocalGame(
   }
 }
 
+export function discardLocalGame(
+  game: LocalGame,
+  storage: LocalStorageLike | null = getBrowserStorage(),
+) {
+  if (!storage || game.completed) return;
+  try {
+    const current = storage.getItem(GAME_STORAGE_KEY);
+    if (!current) return;
+    const parsed: unknown = parseStoredGameData(current);
+    if (!parsed || typeof parsed !== "object") return;
+    const saved = parsed as Record<string, unknown>;
+    const storedGame = saved[game.mode];
+    if (
+      !storedGame || typeof storedGame !== "object" ||
+      (storedGame as Partial<LocalGame>).sessionId !== game.sessionId
+    ) return;
+    delete saved[game.mode];
+    if (Object.keys(saved).length) storage.setItem(GAME_STORAGE_KEY, obfuscateGameData(saved));
+    else storage.removeItem(GAME_STORAGE_KEY);
+  } catch {
+    // An unreadable save should not block leaving the page.
+  }
+}
+
 function isGameRecord(value: unknown): value is GameRecord {
   if (!value || typeof value !== "object") return false;
   const record = value as Partial<GameRecord>;

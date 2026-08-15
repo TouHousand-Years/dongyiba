@@ -18,6 +18,7 @@ import {
 import {
   createLocalGame,
   createNextUnlimitedGame,
+  discardLocalGame,
   getElapsedMs,
   loadGameRecords,
   loadLocalGame,
@@ -250,6 +251,24 @@ test("计时在第一次有效猜测后开始，并在猜中时冻结", () => {
   assert.equal(won.game.timerStartedAt, null);
   assert.equal(won.game.elapsedMs, 3_000);
   assert.equal(getElapsedMs(won.game, 99_000), 3_000);
+});
+
+test("退出每日挑战时放弃当局，但不影响无限模式存档", () => {
+  const catalog = createDefaultCatalog();
+  const storage = new MemoryStorage();
+  const dailyGame = createLocalGame(catalog, "daily", 500);
+  const wrong = catalog.characters.find((item) => item.active && item.id !== dailyGame.answerCharacterId)!;
+  const first = submitLocalGuess(catalog, dailyGame, wrong.name, 1_000);
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  const unlimitedGame = createLocalGame(catalog, "unlimited", 1_500);
+  saveLocalGame(first.game, storage, catalog);
+  saveLocalGame(unlimitedGame, storage, catalog);
+
+  discardLocalGame(first.game, storage);
+
+  assert.equal(loadLocalGame("daily", catalog, storage), null);
+  assert.equal(loadLocalGame("unlimited", catalog, storage)?.sessionId, unlimitedGame.sessionId);
 });
 
 test("每次猜测及其时间会以不可直接读取的格式保存到本地", () => {

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   createNextUnlimitedGame,
   createLocalGame,
+  discardLocalGame,
   getElapsedMs,
   getLocalAnswerName,
   loadLocalGame,
@@ -39,6 +40,7 @@ export function GameBoard() {
   const [playCatalogId, setPlayCatalogId] = useState("");
   const [showCatalogMenu, setShowCatalogMenu] = useState(false);
   const catalogPickerRef = useRef<HTMLDivElement>(null);
+  const gameRef = useRef<LocalGame | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [timingStats, setTimingStats] = useState<TimingStats>({
     completedSessionIds: [],
@@ -109,10 +111,39 @@ export function GameBoard() {
   }, [pageTheme]);
 
   useEffect(() => {
+    gameRef.current = game;
+  }, [game]);
+
+  useEffect(() => {
     if (!game || game.timerStartedAt === null || game.completed) return;
     const timer = window.setInterval(() => setNow(Date.now()), 100);
     return () => window.clearInterval(timer);
   }, [game]);
+
+  useEffect(() => {
+    let discardedDailyGame = false;
+    const exitDailyGame = () => {
+      const currentGame = gameRef.current;
+      if (!currentGame || currentGame.mode !== "daily" || currentGame.completed) return;
+      discardLocalGame(currentGame);
+      gameRef.current = null;
+      discardedDailyGame = true;
+    };
+    const restartAfterBackForwardCache = (event: PageTransitionEvent) => {
+      if (!event.persisted || !discardedDailyGame) return;
+      discardedDailyGame = false;
+      initialize();
+    };
+    window.addEventListener("pagehide", exitDailyGame);
+    window.addEventListener("pageshow", restartAfterBackForwardCache);
+    return () => {
+      window.removeEventListener("pagehide", exitDailyGame);
+      window.removeEventListener("pageshow", restartAfterBackForwardCache);
+      exitDailyGame();
+    };
+    // The exit lifecycle intentionally stays bound for this board instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!showCatalogMenu) return;
