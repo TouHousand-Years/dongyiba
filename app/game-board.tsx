@@ -24,6 +24,7 @@ import {
   type LocalGame,
   type LocalGameMode,
   type GameRecord,
+  type TenMatchDifficulty,
   type TimingStats,
 } from "./local-game";
 import {
@@ -36,6 +37,12 @@ type PageTheme = "dong" | "flandre";
 
 const THEME_STORAGE_KEY = "dongyiba:theme:v1";
 const CONTINUOUS_MODES: LocalGameMode[] = ["unlimited", "custom"];
+const TEN_MATCH_DIFFICULTIES: Array<{ value: TenMatchDifficulty; label: string; detail: string }> = [
+  { value: "easy", label: "Easy", detail: "排除自机数与封面数都为 0 的答案 · 猜错扣时 1/1/2/3/4/5/6s · 猜对 +50s" },
+  { value: "normal", label: "Normal", detail: "猜错扣时 1/2/3/5/7/9/11s · 猜对 +40s" },
+  { value: "hard", label: "Hard", detail: "猜错扣时 1/2/4/8/16/16/16s · 猜对 +30s" },
+  { value: "lunatic", label: "Lunatic", detail: "猜错扣时 1/2/4/8/16/32/64s · 猜对 +20s" },
+];
 
 function isContinuousMode(mode: LocalGameMode) {
   return CONTINUOUS_MODES.includes(mode);
@@ -61,26 +68,33 @@ export function GameBoard() {
   const gameRef = useRef<LocalGame | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [timerPulse, setTimerPulse] = useState<{ kind: "bonus" | "penalty"; id: number } | null>(null);
+  const [tenMatchDifficulty, setTenMatchDifficulty] = useState<TenMatchDifficulty>("hard");
   const [timingStats, setTimingStats] = useState<TimingStats>({
     completedSessionIds: [],
     winDurationsMs: [],
     winAttempts: [],
   });
 
-  function start(nextMode: LocalGameMode = mode, forceNew = false, specifiedCharacterName = "") {
+  function start(
+    nextMode: LocalGameMode = mode,
+    forceNew = false,
+    specifiedCharacterName = "",
+    nextTenMatchDifficulty: TenMatchDifficulty = tenMatchDifficulty,
+  ) {
     setBusy(true);
     try {
       const catalog = loadGameCatalog(nextMode);
       const restored = forceNew ? null : loadLocalGame(nextMode, catalog);
       let nextGame = restored ?? (specifiedCharacterName
         ? createSpecifiedLocalGame(catalog, specifiedCharacterName)
-        : createLocalGame(catalog, nextMode));
+        : createLocalGame(catalog, nextMode, Date.now(), nextTenMatchDifficulty));
       if (nextGame.mode === "ten" && !nextGame.completed && isTenMatchRoundComplete(nextGame)) {
         nextGame = createNextTenMatchGame(catalog, nextGame).game;
       }
       saveLocalGame(nextGame, undefined, catalog);
       setTimingStats(nextGame.completed ? recordCompletedTiming(nextGame) : loadTimingStats());
       setGame(nextGame);
+      if (nextGame.mode === "ten") setTenMatchDifficulty(nextGame.tenMatchDifficulty);
       setNow(Date.now());
       setQuery("");
       setSpecifiedCharacterInput(nextGame.excludedFromHistory ? "已指定人物" : "");
@@ -92,7 +106,9 @@ export function GameBoard() {
             ? "输入角色名，开始今天这一把。"
             : nextMode === "ten"
               ? "猯藏准备了十番变化，你能全部猜出吗？"
-              : "新角色已藏好。",
+              : nextMode === "custom"
+                ? "自定义你的挑战。"
+                : "新角色已藏好。",
       );
     } catch (error) {
       setMessage(
@@ -203,6 +219,7 @@ export function GameBoard() {
   }, [showCatalogMenu]);
 
   const selectedCatalog = catalogChoices.find((catalog) => catalog.id === playCatalogId);
+  const selectedTenMatchDifficulty = TEN_MATCH_DIFFICULTIES.find((item) => item.value === tenMatchDifficulty)!;
 
   const suggestions = useMemo(() => {
     if (!game || query.trim().length < 1) return [];
@@ -278,6 +295,24 @@ export function GameBoard() {
   const average = (durations: number[]) => durations.length
     ? durations.reduce((sum, duration) => sum + duration, 0) / durations.length
     : null;
+  const roundHistory = game?.mode === "ten"
+    ? game.tenMatchHistory.map((round, index, rounds) => {
+      const lastGuess = round.guesses[round.guesses.length - 1];
+      const previousRound = rounds[index - 1];
+      const previousLastGuess = previousRound?.guesses[previousRound.guesses.length - 1];
+      const finishedAt = lastGuess?.elapsedMs;
+      const previousFinishedAt = previousLastGuess?.elapsedMs ?? 0;
+      return {
+        round: round.round,
+        answer: round.answer,
+        attempts: round.guesses.length,
+        won: round.won,
+        durationMs: finishedAt === null || finishedAt === undefined
+          ? null
+          : Math.max(0, finishedAt - previousFinishedAt),
+      };
+    })
+    : game?.unlimitedHistory ?? [];
 
   function nextUnlimitedRound() {
     if (!game || !isContinuousMode(game.mode) || !game.completed) return;
@@ -290,7 +325,7 @@ export function GameBoard() {
       setQuery("");
       setAnswer("");
       setNow(Date.now());
-      setMessage("新角色已藏好。");
+      setMessage(game.mode === "custom" ? "自定义你的挑战。" : "新角色已藏好。");
     } catch {
       setMessage("下一轮未能开始，请重试。");
     } finally {
@@ -331,13 +366,20 @@ export function GameBoard() {
   }
 
   const isFlandreTheme = pageTheme === "flandre";
+  const challengeTitle = mode === "daily"
+    ? `每日挑战 #${game?.challengeNumber ?? "—"}`
+    : mode === "ten"
+      ? `十番战 ${game?.tenMatchRound ?? 1}/${TEN_MATCH_ROUNDS} · ${formatTenMatchDifficulty(game?.tenMatchDifficulty ?? tenMatchDifficulty)}`
+      : mode === "unlimited"
+        ? "无限模式"
+        : "自定义模式";
 
   return (
     <main className={`game-shell theme-${pageTheme}`}>
       <div className="mist mist-one" />
       <div className="mist mist-two" />
       <header className="topbar">
-        <p className="challenge">{mode === "ten" ? `十番战 ${game?.tenMatchRound ?? 1}/${TEN_MATCH_ROUNDS}` : `每日挑战 #${game?.challengeNumber ?? "—"}`}</p>
+        <p className="challenge">{challengeTitle}</p>
         <div className="topbar-actions">
           <button
             className="theme-toggle"
@@ -382,8 +424,21 @@ export function GameBoard() {
         </section>
       )}
 
-      <div className={`play-layout ${isContinuousMode(mode) ? "with-stats" : ""}`}>
+      <div className={`play-layout ${mode === "ten" || isContinuousMode(mode) ? "with-stats" : ""}`}>
       <section className="game-card" aria-label="东一把游戏挑战">
+        <div className="mode-switch" aria-label="选择游戏模式">
+          {(["daily", "ten", "unlimited", "custom"] as const).map((item) => (
+            <button
+              key={item}
+              className={mode === item ? "active" : ""}
+              aria-pressed={mode === item}
+              onClick={() => { setMode(item); start(item, true); }}
+            >
+              {item === "daily" ? "每日挑战" : item === "ten" ? "十番战" : item === "unlimited" ? "无限模式" : "自定义模式"}
+            </button>
+          ))}
+        </div>
+
         {mode === "custom" && (
           <div className="custom-game-options">
             <div
@@ -445,18 +500,28 @@ export function GameBoard() {
             </form>
           </div>
         )}
-        <div className="mode-switch" aria-label="选择游戏模式">
-          {(["daily", "ten", "unlimited", "custom"] as const).map((item) => (
-            <button
-              key={item}
-              className={mode === item ? "active" : ""}
-              aria-pressed={mode === item}
-              onClick={() => { setMode(item); start(item, true); }}
-            >
-              {item === "daily" ? "每日挑战" : item === "ten" ? "十番战" : item === "unlimited" ? "无限模式" : "自定义模式"}
-            </button>
-          ))}
-        </div>
+
+        {mode === "ten" && (
+          <section className="ten-match-difficulty" aria-label="选择十番战难度">
+            <span>难度</span>
+            <div role="group" aria-label="十番战难度">
+              {TEN_MATCH_DIFFICULTIES.map((item) => (
+                <button
+                  type="button"
+                  key={item.value}
+                  className={tenMatchDifficulty === item.value ? "active" : ""}
+                  aria-pressed={tenMatchDifficulty === item.value}
+                  disabled={busy}
+                  onClick={() => {
+                    setTenMatchDifficulty(item.value);
+                    start("ten", true, "", item.value);
+                  }}
+                >{item.label}</button>
+              ))}
+            </div>
+            <p>{selectedTenMatchDifficulty.detail}</p>
+          </section>
+        )}
 
         <form className="guess-form" onSubmit={submit}>
           <label htmlFor="character-name">角色名</label>
@@ -553,35 +618,37 @@ export function GameBoard() {
         </div>
       </section>
 
-      {isContinuousMode(mode) && game && (
-        <aside className="timing-panel" aria-label={`${mode === "custom" ? "自定义" : "无限"}模式用时统计`}>
+      {(mode === "ten" || isContinuousMode(mode)) && game && (
+        <aside className="timing-panel" aria-label={`${mode === "ten" ? "十番战" : mode === "custom" ? "自定义" : "无限"}模式用时统计`}>
           <p className="eyebrow">Run history</p>
           <h2>本次游戏</h2>
-          {game.unlimitedHistory.length ? (
+          {roundHistory.length ? (
             <ol className="round-history">
-              {[...game.unlimitedHistory].reverse().map((round) => (
+              {[...roundHistory].reverse().map((round) => (
                 <li key={round.round}>
                   <span>第 {round.round} 轮 · {round.answer}</span>
                   <div className="round-metrics">
-                    <b>{round.won ? formatDuration(round.durationMs) : "未猜出"}</b>
+                    <b>{round.won && round.durationMs !== null ? formatDuration(round.durationMs) : "未猜出"}</b>
                     <b>{round.attempts} 次</b>
                   </div>
                 </li>
               ))}
             </ol>
           ) : <p className="empty-history">完成当前人物后，这里会记录前几轮用时。</p>}
-          <dl className="averages">
-            <div className="average-head"><dt /><dd><span>用时</span><span>计次</span></dd></div>
-            <div>
-              <dt>最近 10 次平均</dt>
-              <dd><span>{formatAverage(average(recentDurations))}</span><span>{formatAttemptAverage(average(recentAttempts))}</span></dd>
-            </div>
-            <div>
-              <dt>生涯平均</dt>
-              <dd><span>{formatAverage(average(timingStats.winDurationsMs))}</span><span>{formatAttemptAverage(average(timingStats.winAttempts))}</span></dd>
-            </div>
-          </dl>
-          <p className="stats-note">平均值仅统计成功猜出的对局</p>
+          {mode !== "ten" && <>
+            <dl className="averages">
+              <div className="average-head"><dt /><dd><span>用时</span><span>计次</span></dd></div>
+              <div>
+                <dt>最近 10 次平均</dt>
+                <dd><span>{formatAverage(average(recentDurations))}</span><span>{formatAttemptAverage(average(recentAttempts))}</span></dd>
+              </div>
+              <div>
+                <dt>生涯平均</dt>
+                <dd><span>{formatAverage(average(timingStats.winDurationsMs))}</span><span>{formatAttemptAverage(average(timingStats.winAttempts))}</span></dd>
+              </div>
+            </dl>
+            <p className="stats-note">平均值仅统计成功猜出的对局</p>
+          </>}
         </aside>
       )}
       </div>
@@ -624,7 +691,7 @@ export function GameBoard() {
                           ? `十番战 · 猜出 ${countTenMatchWins(record)}/${TEN_MATCH_ROUNDS} 位`
                           : record.completed ? record.answerName : "答案将在本局结束后显示"}</span>
                         <span className="history-meta">
-                          {formatRecordMode(record.mode)} · {record.guesses.length} 次猜测 · {record.mode === "ten"
+                          {formatRecordMode(record.mode)}{record.mode === "ten" ? ` ${formatTenMatchDifficulty(record.tenMatchDifficulty ?? "hard")}` : ""} · {record.guesses.length} 次猜测 · {record.mode === "ten"
                             ? `剩余 ${formatDuration(record.tenMatchRemainingMs ?? 0)}`
                             : formatDuration(record.durationMs)}
                         </span>
@@ -686,6 +753,10 @@ export function GameBoard() {
 
 function formatRecordMode(mode: LocalGameMode) {
   return mode === "daily" ? "每日挑战" : mode === "ten" ? "十番战" : mode === "unlimited" ? "无限模式" : "自定义模式";
+}
+
+function formatTenMatchDifficulty(difficulty: TenMatchDifficulty) {
+  return difficulty === "easy" ? "Easy" : difficulty === "normal" ? "Normal" : difficulty === "lunatic" ? "Lunatic" : "Hard";
 }
 
 function formatRecordResult(record: GameRecord, isActive: boolean) {

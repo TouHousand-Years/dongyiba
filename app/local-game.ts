@@ -17,11 +17,16 @@ import {
 } from "./local-catalog";
 
 export type LocalGameMode = "daily" | "ten" | "unlimited" | "custom";
+export type TenMatchDifficulty = "easy" | "normal" | "hard" | "lunatic";
 
 export const TEN_MATCH_ROUNDS = 10;
 export const TEN_MATCH_INITIAL_MS = 10 * 60 * 1000;
-const TEN_MATCH_WRONG_PENALTIES_MS = [1, 2, 4, 8, 16].map((seconds) => seconds * 1000);
-const TEN_MATCH_CORRECT_BONUS_MS = 30 * 1000;
+export const TEN_MATCH_RULES: Record<TenMatchDifficulty, { wrongPenaltiesMs: number[]; correctBonusMs: number }> = {
+  easy: { wrongPenaltiesMs: [1, 1, 2, 3, 4, 5, 6].map((seconds) => seconds * 1000), correctBonusMs: 50_000 },
+  normal: { wrongPenaltiesMs: [1, 2, 3, 5, 7, 9, 11].map((seconds) => seconds * 1000), correctBonusMs: 40_000 },
+  hard: { wrongPenaltiesMs: [1, 2, 4, 8, 16, 16, 16].map((seconds) => seconds * 1000), correctBonusMs: 30_000 },
+  lunatic: { wrongPenaltiesMs: [1, 2, 4, 8, 16, 32, 64].map((seconds) => seconds * 1000), correctBonusMs: 20_000 },
+};
 
 export type LocalGuess = {
   id: number;
@@ -68,6 +73,7 @@ export type LocalGame = {
   unlimitedElapsedMs: number;
   unlimitedHistory: UnlimitedRound[];
   tenMatchRound: number;
+  tenMatchDifficulty: TenMatchDifficulty;
   tenMatchAdjustmentMs: number;
   tenMatchHistory: TenMatchRound[];
   guesses: LocalGuess[];
@@ -96,6 +102,7 @@ export type GameRecord = {
   durationMs: number;
   tenMatchRounds?: TenMatchRound[];
   tenMatchRemainingMs?: number;
+  tenMatchDifficulty?: TenMatchDifficulty;
 };
 
 export type TimingStats = {
@@ -190,8 +197,32 @@ function newSessionId(): string {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export function createLocalGame(catalog: LocalCatalog, mode: LocalGameMode, now = Date.now()): LocalGame {
-  return createLocalGameWithAnswer(catalog, mode, now, null, false);
+export function createLocalGame(
+  catalog: LocalCatalog,
+  mode: LocalGameMode,
+  now = Date.now(),
+  tenMatchDifficulty: TenMatchDifficulty = "hard",
+): LocalGame {
+  return createLocalGameWithAnswer(catalog, mode, now, null, false, tenMatchDifficulty);
+}
+
+function isTenMatchDifficulty(value: unknown): value is TenMatchDifficulty {
+  return value === "easy" || value === "normal" || value === "hard" || value === "lunatic";
+}
+
+function easyTenMatchCharacters(catalog: LocalCatalog, characters: LocalCharacter[]): LocalCharacter[] {
+  const playerTag = catalog.tags.find((tag) => tag.name.startsWith("自机次数"));
+  const coverTag = catalog.tags.find((tag) => tag.name.startsWith("封面人物次数"));
+  if (!playerTag || !coverTag) return characters;
+  return characters.filter((character) => {
+    const playerCount = Number(catalog.values.find((value) => (
+      value.characterId === character.id && value.tagId === playerTag.id
+    ))?.value ?? 0);
+    const coverCount = Number(catalog.values.find((value) => (
+      value.characterId === character.id && value.tagId === coverTag.id
+    ))?.value ?? 0);
+    return playerCount > 0 || coverCount > 0;
+  });
 }
 
 function createLocalGameWithAnswer(
@@ -200,15 +231,20 @@ function createLocalGameWithAnswer(
   now: number,
   specifiedAnswer: LocalCharacter | null,
   excludedFromHistory: boolean,
+  tenMatchDifficulty: TenMatchDifficulty = "hard",
 ): LocalGame {
   const characters = getActiveCharacters(catalog);
   const tags = getActiveTags(catalog);
   if (!characters.length || !tags.length) throw new Error("题库尚未配置完成。");
+  const answerCharacters = mode === "ten" && tenMatchDifficulty === "easy"
+    ? easyTenMatchCharacters(catalog, characters)
+    : characters;
+  if (!answerCharacters.length) throw new Error("Easy 难度没有可用的答案角色。");
 
   const day = shanghaiDay();
   const index = mode === "daily"
-    ? dayHash(day) % characters.length
-    : Math.floor(Math.random() * characters.length);
+    ? dayHash(day) % answerCharacters.length
+    : Math.floor(Math.random() * answerCharacters.length);
 
   return {
     sessionId: newSessionId(),
@@ -218,7 +254,7 @@ function createLocalGameWithAnswer(
     mode,
     excludedFromHistory,
     maxAttempts: 8,
-    answerCharacterId: specifiedAnswer?.id ?? characters[index].id,
+    answerCharacterId: specifiedAnswer?.id ?? answerCharacters[index].id,
     names: characters.map((character) => character.name),
     tags: toTagDefinitions(tags),
     attempts: 0,
@@ -231,6 +267,7 @@ function createLocalGameWithAnswer(
     unlimitedElapsedMs: 0,
     unlimitedHistory: [],
     tenMatchRound: 1,
+    tenMatchDifficulty,
     tenMatchAdjustmentMs: 0,
     tenMatchHistory: [],
     guesses: [],
@@ -297,6 +334,9 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
   const tenMatchRound = mode === "ten" && Number.isInteger(stored.tenMatchRound)
     ? Math.min(TEN_MATCH_ROUNDS, Math.max(1, Number(stored.tenMatchRound)))
     : 1;
+  const tenMatchDifficulty = mode === "ten" && isTenMatchDifficulty(stored.tenMatchDifficulty)
+    ? stored.tenMatchDifficulty
+    : "hard";
   const tenMatchAdjustmentMs = mode === "ten" && typeof stored.tenMatchAdjustmentMs === "number" && Number.isFinite(stored.tenMatchAdjustmentMs)
     ? stored.tenMatchAdjustmentMs
     : 0;
@@ -368,6 +408,7 @@ function normalizeStoredGame(value: unknown, mode: LocalGameMode, catalog: Local
       : 0,
     unlimitedHistory,
     tenMatchRound,
+    tenMatchDifficulty,
     tenMatchAdjustmentMs,
     tenMatchHistory,
     guesses,
@@ -423,7 +464,7 @@ export function createNextTenMatchGame(
   let advancedRounds = 0;
   while (!current.completed && current.tenMatchRound < TEN_MATCH_ROUNDS && isTenMatchRoundComplete(current)) {
     const carriedGuess = getLocalAnswerName(catalog, current);
-    const nextBase = createLocalGame(catalog, "ten", now);
+    const nextBase = createLocalGame(catalog, "ten", now, current.tenMatchDifficulty);
     const next: LocalGame = {
       ...nextBase,
       sessionId: current.sessionId,
@@ -623,7 +664,7 @@ function isGameRecord(value: unknown): value is GameRecord {
       Array.isArray(record.tenMatchRounds) && record.tenMatchRounds.every(isStoredTenMatchRound)
     )) && (record.tenMatchRemainingMs === undefined || (
       typeof record.tenMatchRemainingMs === "number" && Number.isFinite(record.tenMatchRemainingMs) && record.tenMatchRemainingMs >= 0
-    ));
+    )) && (record.tenMatchDifficulty === undefined || isTenMatchDifficulty(record.tenMatchDifficulty));
 }
 
 export function loadGameRecords(
@@ -673,6 +714,7 @@ function toGameRecord(game: LocalGame, catalog: LocalCatalog): GameRecord {
     durationMs: lastGuess?.elapsedMs ?? game.elapsedMs,
     tenMatchRounds,
     tenMatchRemainingMs: game.mode === "ten" ? getTenMatchRemainingMs(game) : undefined,
+    tenMatchDifficulty: game.mode === "ten" ? game.tenMatchDifficulty : undefined,
   };
 }
 
@@ -763,12 +805,13 @@ export function submitLocalGuess(
   const lost = attempts >= game.maxAttempts && !won;
   const startsTimer = game.guesses.length === 0 && game.timerStartedAt === null;
   const activeTimerStartedAt = startsTimer ? now : game.timerStartedAt;
+  const tenMatchRules = TEN_MATCH_RULES[game.tenMatchDifficulty];
   const timeDeltaMs = game.mode === "ten"
     ? won
-      ? TEN_MATCH_CORRECT_BONUS_MS
+      ? tenMatchRules.correctBonusMs
       : attempts <= 1
         ? 0
-        : -TEN_MATCH_WRONG_PENALTIES_MS[Math.min(attempts - 2, TEN_MATCH_WRONG_PENALTIES_MS.length - 1)]
+        : -tenMatchRules.wrongPenaltiesMs[Math.min(attempts - 2, tenMatchRules.wrongPenaltiesMs.length - 1)]
     : 0;
   const tenMatchAdjustmentMs = game.tenMatchAdjustmentMs + timeDeltaMs;
   const guessElapsedMs = Math.max(
