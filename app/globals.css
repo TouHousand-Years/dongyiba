@@ -578,7 +578,7 @@ footer { text-align: center; color: #998d92; font-size: 11px; letter-spacing: .0
   .theme-toggle { gap: 6px; }
   .theme-gem { width: 7px; height: 7px; }
   .hero { margin-top: 38px; }
-  .theme-flandre .crystal-wings { width: 390px; transform: translateX(-50%) scale(.78); }
+  .theme-flandre .crystal-wings { width: 590px; transform: translateX(-50%); }
   .subtitle { letter-spacing: .08em; }
   .status-strip span { padding: 0 11px; }
   .timer-strip span { min-width: 112px; padding-inline: 13px; }
