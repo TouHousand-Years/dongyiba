@@ -232,6 +232,7 @@ function createLocalGameWithAnswer(
   specifiedAnswer: LocalCharacter | null,
   excludedFromHistory: boolean,
   tenMatchDifficulty: TenMatchDifficulty = "hard",
+  excludedCharacterIds: ReadonlySet<number> = new Set(),
 ): LocalGame {
   const characters = getActiveCharacters(catalog);
   const tags = getActiveTags(catalog);
@@ -240,11 +241,15 @@ function createLocalGameWithAnswer(
     ? easyTenMatchCharacters(catalog, characters)
     : characters;
   if (!answerCharacters.length) throw new Error("Easy 难度没有可用的答案角色。");
+  const availableAnswerCharacters = mode === "ten"
+    ? answerCharacters.filter((character) => !excludedCharacterIds.has(character.id))
+    : answerCharacters;
+  if (!availableAnswerCharacters.length) throw new Error("十番战没有未出现的可用答案角色。");
 
   const day = shanghaiDay();
   const index = mode === "daily"
-    ? dayHash(day) % answerCharacters.length
-    : Math.floor(Math.random() * answerCharacters.length);
+    ? dayHash(day) % availableAnswerCharacters.length
+    : Math.floor(Math.random() * availableAnswerCharacters.length);
 
   return {
     sessionId: newSessionId(),
@@ -254,7 +259,7 @@ function createLocalGameWithAnswer(
     mode,
     excludedFromHistory,
     maxAttempts: 8,
-    answerCharacterId: specifiedAnswer?.id ?? answerCharacters[index].id,
+    answerCharacterId: specifiedAnswer?.id ?? availableAnswerCharacters[index].id,
     names: characters.map((character) => character.name),
     tags: toTagDefinitions(tags),
     attempts: 0,
@@ -464,7 +469,19 @@ export function createNextTenMatchGame(
   let advancedRounds = 0;
   while (!current.completed && current.tenMatchRound < TEN_MATCH_ROUNDS && isTenMatchRoundComplete(current)) {
     const carriedGuess = getLocalAnswerName(catalog, current);
-    const nextBase = createLocalGame(catalog, "ten", now, current.tenMatchDifficulty);
+    const appearedCharacterIds = new Set([
+      ...current.tenMatchHistory.map((round) => round.answerCharacterId),
+      current.answerCharacterId,
+    ]);
+    const nextBase = createLocalGameWithAnswer(
+      catalog,
+      "ten",
+      now,
+      null,
+      false,
+      current.tenMatchDifficulty,
+      appearedCharacterIds,
+    );
     const next: LocalGame = {
       ...nextBase,
       sessionId: current.sessionId,

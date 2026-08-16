@@ -383,6 +383,32 @@ test("十番战自动用上一局人物作为下一局首猜，且首猜错误�
   }
 });
 
+test("十番战同一组内随机出角色时排除已出现角色", () => {
+  const catalog = createDefaultCatalog();
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    let game = { ...createLocalGame(catalog, "ten", 500), answerCharacterId: catalog.characters[0].id };
+    const appearedCharacterIds = new Set([game.answerCharacterId]);
+
+    for (let round = 1; round < TEN_MATCH_ROUNDS; round += 1) {
+      const answer = catalog.characters.find((character) => character.id === game.answerCharacterId)!;
+      const won = submitLocalGuess(catalog, game, answer.name, 1_000 + round * 1_000);
+      assert.equal(won.ok, true);
+      if (!won.ok) return;
+
+      const advanced = createNextTenMatchGame(catalog, won.game, 1_500 + round * 1_000);
+      assert.equal(appearedCharacterIds.has(advanced.game.answerCharacterId), false);
+      appearedCharacterIds.add(advanced.game.answerCharacterId);
+      game = advanced.game;
+    }
+
+    assert.equal(appearedCharacterIds.size, TEN_MATCH_ROUNDS);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test("十番战恰好进行 10 局，并在历史中作为 1 局保存", () => {
   const catalog = createDefaultCatalog();
   const storage = new MemoryStorage();
