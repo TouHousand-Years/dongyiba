@@ -1,7 +1,7 @@
 import packageJson from "../package.json";
 
 export const CURRENT_VERSION = packageJson.version;
-export const DISPLAY_VERSION = `V${CURRENT_VERSION}`;
+export const DISPLAY_VERSION = `v${CURRENT_VERSION}`;
 export const APP_GITHUB_URL = "https://github.com/TouHousand-Years/dongyiba";
 
 const APP_VERSION_URL =

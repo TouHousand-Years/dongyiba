@@ -64,7 +64,7 @@ export function UpdateCenter() {
       {showNotice && (
         <aside className="update-notice" role="alert">
           <div>
-            <strong>{hasAppUpdate && hasCatalogUpdate ? "应用和官方题库都有更新" : hasAppUpdate ? `发现新版本 V${latestVersion}` : "官方题库有更新"}</strong>
+            <strong>{hasAppUpdate && hasCatalogUpdate ? "应用和官方题库都有更新" : hasAppUpdate ? `发现新版本 v${latestVersion}` : "官方题库有更新"}</strong>
             <span>打开更新中心查看详情。</span>
           </div>
           <button type="button" className="update-notice-action" onClick={() => setPanelOpen(true)}>查看</button>
@@ -87,7 +87,7 @@ export function UpdateCenter() {
             <UpdateRow
               title="应用版本"
               state={appState}
-              availableText={`发现新版本 V${latestVersion}`}
+              availableText={`发现新版本 v${latestVersion}`}
               onCheck={() => void checkAppVersion(true)}
               updateUrl={APP_GITHUB_URL}
             />

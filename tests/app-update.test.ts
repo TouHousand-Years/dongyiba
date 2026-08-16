@@ -8,8 +8,8 @@ import {
 } from "../app/app-update";
 
 test("当前显示版本来自 package.json", () => {
-  assert.equal(CURRENT_VERSION, "0.1.2");
-  assert.equal(DISPLAY_VERSION, "V0.1.2");
+  assert.equal(CURRENT_VERSION, "0.2.0");
+  assert.equal(DISPLAY_VERSION, "v0.2.0");
 });
 
 test("版本比较支持补丁版本与预发布版本", () => {
